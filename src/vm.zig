@@ -33,15 +33,15 @@ pub const vm = extern struct
                 },
                 .sub => {
                     const args = instruction.decode(.sub, ip.*);
-                    try value.add(&self.stack[args.d], storage[args.l & 1][args.l >> 1], storage[args.r & 1][args.r >> 1]);
+                    try value.sub(&self.stack[args.d], storage[args.l & 1][args.l >> 1], storage[args.r & 1][args.r >> 1]);
                 },
                 .mul => {
                     const args = instruction.decode(.mul, ip.*);
-                    try value.add(&self.stack[args.d], storage[args.l & 1][args.l >> 1], storage[args.r & 1][args.r >> 1]);
+                    try value.mul(&self.stack[args.d], storage[args.l & 1][args.l >> 1], storage[args.r & 1][args.r >> 1]);
                 },
                 .div => {
                     const args = instruction.decode(.div, ip.*);
-                    try value.add(&self.stack[args.d], storage[args.l & 1][args.l >> 1], storage[args.r & 1][args.r >> 1]);
+                    try value.div(&self.stack[args.d], storage[args.l & 1][args.l >> 1], storage[args.r & 1][args.r >> 1]);
                 },
                 else => unreachable,
             }

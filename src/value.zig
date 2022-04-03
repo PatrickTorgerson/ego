@@ -27,17 +27,20 @@ pub const value = extern struct
         nil: u8,
     } = .{.nil=0},
 
+
     // ********************************************************************************
     pub fn integral(i: i64) value
     {
         return value{.ty=.integral,.as=.{.integral=i}};
     }
 
+
     // ********************************************************************************
     pub fn floating(f: f64) value
     {
         return value{.ty=.floating,.as=.{.floating=f}};
     }
+
 
     // ********************************************************************************
     pub fn add(dest: *value, l: value, r: value) error_t!void
@@ -54,7 +57,59 @@ pub const value = extern struct
 
         dest.*.ty = l.ty;
     }
+
+
+    // ********************************************************************************
+    pub fn sub(dest: *value, l: value, r: value) error_t!void
+    {
+        if(l.ty != r.ty)
+            return error_t.type_mismatch;
+
+        switch(l.ty)
+        {
+            .integral => dest.*.as.integral = l.as.integral - r.as.integral,
+            .floating => dest.*.as.floating = l.as.floating - r.as.floating,
+            else => return error_t.invalid_argument,
+        }
+
+        dest.*.ty = l.ty;
+    }
+
+
+    // ********************************************************************************
+    pub fn mul(dest: *value, l: value, r: value) error_t!void
+    {
+        if(l.ty != r.ty)
+            return error_t.type_mismatch;
+
+        switch(l.ty)
+        {
+            .integral => dest.*.as.integral = l.as.integral * r.as.integral,
+            .floating => dest.*.as.floating = l.as.floating * r.as.floating,
+            else => return error_t.invalid_argument,
+        }
+
+        dest.*.ty = l.ty;
+    }
+
+
+    // ********************************************************************************
+    pub fn div(dest: *value, l: value, r: value) error_t!void
+    {
+        if(l.ty != r.ty)
+            return error_t.type_mismatch;
+
+        switch(l.ty)
+        {
+            .integral => dest.*.as.integral = l.as.integral / r.as.integral,
+            .floating => dest.*.as.floating = l.as.floating / r.as.floating,
+            else => return error_t.invalid_argument,
+        }
+
+        dest.*.ty = l.ty;
+    }
 };
+
 
 test "value"
 {
