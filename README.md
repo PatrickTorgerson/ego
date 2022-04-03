@@ -10,7 +10,7 @@ Small interpreted scripting language with a focus on speed and embedability
 ---
 
 > NOTE : this is a proposed syntax and is subject to change.
->       Currently only basic instruction encoding / decoding is implemented
+>       Currently only a basic virtual machine is implemented
 
 ```go
 type vec2 = struct

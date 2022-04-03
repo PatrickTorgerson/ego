@@ -18,11 +18,18 @@ fn k(value: ego.instruction.basetype) ego.instruction.basetype
 
 pub fn main() !void
 {
+    var vm = ego.vm{};
+
     const program = [_] ego.instruction
     {
         ego.instruction.odlr(.add, 0, k(0), k(0)),
         ego.instruction.odlr(.add, 1, r(0), k(1)),
     };
-    _ = program;
-    std.debug.print("Hello from the other side\n", .{});
+
+    vm.kst[0] = ego.value {.ty = .integral, .as = .{.integral = 5}};
+    vm.kst[1] = ego.value {.ty = .integral, .as = .{.integral = 1}};
+
+    try vm.execute(&program);
+
+    std.log.info("stack[1] = {} // 11", .{vm.stack[1].as.integral});
 }
