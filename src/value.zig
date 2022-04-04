@@ -18,7 +18,7 @@ pub const builtin = enum(c_int)
 // ********************************************************************************
 pub const value = extern struct
 {
-    pub const error_t = error {type_mismatch, invalid_argument};
+    pub const error_t = error {type_mismatch, invalid_argument, divide_by_zero};
 
     ty: builtin = .nil,
     as: extern union {
@@ -101,8 +101,14 @@ pub const value = extern struct
 
         switch(l.ty)
         {
-            .integral => dest.*.as.integral = @divTrunc(l.as.integral, r.as.integral),
-            .floating => dest.*.as.floating = l.as.floating / r.as.floating,
+            .integral =>
+                if(r.as.integral == 0)
+                    return error_t.divide_by_zero
+                else dest.*.as.integral = @divTrunc(l.as.integral, r.as.integral),
+            .floating =>
+                if(r.as.floating == 0.0)
+                    return error_t.divide_by_zero
+                else dest.*.as.floating = l.as.floating / r.as.floating,
             else => return error_t.invalid_argument,
         }
 
