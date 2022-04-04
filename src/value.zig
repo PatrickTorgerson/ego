@@ -101,7 +101,7 @@ pub const value = extern struct
 
         switch(l.ty)
         {
-            .integral => dest.*.as.integral = l.as.integral / r.as.integral,
+            .integral => dest.*.as.integral = @divTrunc(l.as.integral, r.as.integral),
             .floating => dest.*.as.floating = l.as.floating / r.as.floating,
             else => return error_t.invalid_argument,
         }
