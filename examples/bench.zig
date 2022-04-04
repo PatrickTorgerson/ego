@@ -15,21 +15,20 @@ fn r(value: ego.instruction.basetype) ego.instruction.basetype
 fn k(value: ego.instruction.basetype) ego.instruction.basetype
 { return r(value) | 1; }
 
+const src =
+\\func square(n &int) int
+\\    var result = n * n
+\\    return result
+;
+
 
 pub fn main() !void
 {
-    var vm = ego.vm{};
+    var lexer = ego.lexer.init(src);
 
-    const program = [_] ego.instruction
+    var next = lexer.next();
+    while(next.ty != .eof):(next = lexer.next())
     {
-        ego.instruction.odlr(.add, 0, k(0), k(0)),
-        ego.instruction.odlr(.add, 1, r(0), k(1)),
-    };
-
-    vm.kst[0] = ego.value {.ty = .integral, .as = .{.integral = 5}};
-    vm.kst[1] = ego.value {.ty = .integral, .as = .{.integral = 1}};
-
-    try vm.execute(&program);
-
-    std.log.info("stack[1] = {} // 11", .{vm.stack[1].as.integral});
+        std.debug.print("{s: >20} : '{s}'\n", .{@tagName(next.ty), lexer.string(next)});
+    }
 }

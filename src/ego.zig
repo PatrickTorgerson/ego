@@ -11,6 +11,7 @@ pub const instruction = @import("instruction.zig").instruction;
 pub const value = @import("value.zig").value;
 pub const builtin = @import("value.zig").builtin;
 pub const vm = @import("vm.zig").vm;
+pub const lexer = @import("lex.zig").lexer;
 
 test "ego"
 {
