@@ -7,26 +7,25 @@
 Small interpreted scripting language with a focus on speed and embedability
 
 ## Example
----
 
-> NOTE : this is a proposed syntax and is subject to change.
+> NOTE : This is a proposed syntax and is subject to change.
 >       Currently only a basic virtual machine is implemented
 
 ```go
 type vec2 = struct
     x,y numeric
 
-    method lensqrd() numeric
-        return .x * .x + .y * .y
+method vec2.lensqrd() numeric
+    return .x * .x + .y * .y
 
-    method len() numeric
-        return math.sqrt(.lensqrd())
+method vec2.len() numeric
+    return math.sqrt(.lensqrd())
 
-    operator +(l,r vec2) vec2
-        return vec2: l.x + r.x, l.y + r.y
+operator +(l,r vec2) vec2
+    return vec2: l.x + r.x, l.y + r.y
 
-    operator *(l vec2, r numeric) vec2
-        return vec2: l.x * r, l.y * r
+operator *(l vec2, r numeric) vec2
+    return vec2: l.x * r, l.y * r
 
 
 var pos = vec2: 0,0
@@ -41,8 +40,9 @@ for simulation.running()
     physics_step(frametime())
 ```
 
+For a complete overview of ego see [overview.md](https://github.com/PatrickTorgerson/ego/blob/main/overview.md)
+
 ## Licence
----
 
 > MIT License
 >

@@ -4,7 +4,6 @@
 //! ego uses the MIT license, see LICENSE for more information
 // ********************************************************************************
 
-
 const std = @import("std");
 
 pub const instruction = @import("instruction.zig").instruction;

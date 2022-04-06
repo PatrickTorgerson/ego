@@ -193,20 +193,17 @@ pub const lexer = extern struct
                         lex.ty = .literal_int;
                         state = .number;
                     },
-                    'a'...'z', 'A'...'Z', '_' =>
-                    {
+                    'a'...'z', 'A'...'Z', '_' => {
                         lex.ty = .identifier;
                         state = .identifier;
                     },
 
-                    '(' =>
-                    {
+                    '(' => {
                         lex.ty = .lparen;
                         self.nextc();
                         break;
                     },
-                    ')' =>
-                    {
+                    ')' => {
                         lex.ty = .rparen;
                         self.nextc();
                         break;
@@ -233,7 +230,7 @@ pub const lexer = extern struct
                     }
                 },
                 .plus => switch(c) {
-                    '+' =>  {
+                    '+' => {
                         lex.ty = .plus_plus;
                         self.nextc();
                         break;
@@ -246,7 +243,7 @@ pub const lexer = extern struct
                     else => { lex.ty = .plus; break; },
                 },
                 .minus => switch(c) {
-                    '=' =>  {
+                    '=' => {
                         lex.ty = .minus_equal;
                         self.nextc();
                         break;
@@ -254,7 +251,7 @@ pub const lexer = extern struct
                     else => { lex.ty = .minus; break; },
                 },
                 .star => switch(c) {
-                    '=' =>  {
+                    '=' => {
                         lex.ty = .star_equal;
                         self.nextc();
                         break;
@@ -262,7 +259,7 @@ pub const lexer = extern struct
                     else => { lex.ty = .star; break; },
                 },
                 .slash => switch(c) {
-                    '=' =>  {
+                    '=' => {
                         lex.ty = .slash_equal;
                         self.nextc();
                         break;
