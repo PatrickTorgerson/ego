@@ -103,12 +103,14 @@ pub const value = extern struct
         {
             .integral =>
                 if(r.as.integral == 0)
-                    return error_t.divide_by_zero
-                else dest.*.as.integral = @divTrunc(l.as.integral, r.as.integral),
+                { return error_t.divide_by_zero; }
+                else
+                { dest.*.as.integral = @divTrunc(l.as.integral, r.as.integral); },
             .floating =>
                 if(r.as.floating == 0.0)
-                    return error_t.divide_by_zero
-                else dest.*.as.floating = l.as.floating / r.as.floating,
+                { return error_t.divide_by_zero; }
+                else
+                { dest.*.as.floating = l.as.floating / r.as.floating; },
             else => return error_t.invalid_argument,
         }
 

@@ -13,14 +13,10 @@ pub const instruction = extern struct
 {
 
     // instruction argument sizes
-    const osize = 6;  // 64
-    const dsize = 8;  // 256
-    const lsize = 9;  // 512
-    const rsize = 9;  // 512 // 262'144 // 67'108'864
-    // const osize = 8;   // 256
-    // const dsize = 16;  // 65'536
-    // const lsize = 20;  // 1'048'576
-    // const rsize = 20;  // 1'048'576
+    const osize = 8;  // 256
+    const dsize = 18;  // 262'144
+    const lsize = 19;  // 524'288
+    const rsize = 19;  // 524'288
     const ssize = lsize + rsize;
     const xsize = dsize + ssize;
 
@@ -49,14 +45,17 @@ pub const instruction = extern struct
     // ********************************************************************************
     pub const opcode = enum(c_int)
     {
-        add, sub, mul, div, mod,  // reg rk rk
-        land, lor, lnot,           // reg rk rk
-        eq, ne, lt, le,           // reg rk rk
+        iadd, isub, imul, idiv,
+        fadd, fsub, fmul, fdiv,
+        // mod,
+        // band, bor, bnot, lsh, rsh,
+        // land, lor, lnot,
+        // eq, ne, lt, le,
         mov,
-        jmp, // ui
-        call,
-        ret,
-        deref,
+        jmp,
+        // call,
+        // ret,
+        // deref,
 
         COUNT
     };
@@ -97,41 +96,41 @@ pub const instruction = extern struct
         const ismask   = mask1(u32, ispos, 3);
         const ixmask   = mask1(u32, ixpos, 3);
 
-        fn to_basetype(e: anytype) basetype
-        { return @intCast(basetype, @enumToInt(e)); }
+        fn cast(e: anytype) u32
+        { return @intCast(u32, @enumToInt(e)); }
 
         pub fn odlr(name_ptr:[:0]const u8, d:argmode, l:argmode, r:argmode) info
         {
             return info { .name_ptr = name_ptr, .bits =
                 @as(u32,0) |
-                (to_basetype(signiture.odlr) << isigpos) |
-                (to_basetype(d) << idpos) |
-                (to_basetype(l) << ilpos) |
-                (to_basetype(r) << irpos) |
-                (to_basetype(argmode.unused) << ispos) |
-                (to_basetype(argmode.unused) << ixpos)};
+                (cast(signiture.odlr) << isigpos) |
+                (cast(d) << idpos) |
+                (cast(l) << ilpos) |
+                (cast(r) << irpos) |
+                (cast(argmode.unused) << ispos) |
+                (cast(argmode.unused) << ixpos)};
         }
         pub fn ods(name_ptr:[:0]const u8, d:argmode, s:argmode) info
         {
             return info { .name_ptr = name_ptr, .bits =
                 @as(u32,0) |
-                (to_basetype(signiture.ods) << isigpos) |
-                (to_basetype(d) << idpos) |
-                (to_basetype(argmode.unused) << ilpos) |
-                (to_basetype(argmode.unused) << irpos) |
-                (to_basetype(s) << ispos) |
-                (to_basetype(argmode.unused) << ixpos)};
+                (cast(signiture.ods) << isigpos) |
+                (cast(d) << idpos) |
+                (cast(argmode.unused) << ilpos) |
+                (cast(argmode.unused) << irpos) |
+                (cast(s) << ispos) |
+                (cast(argmode.unused) << ixpos)};
         }
         pub fn ox(name_ptr:[:0]const u8, x:argmode) info
         {
             return info { .name_ptr = name_ptr, .bits =
                 @as(u32,0) |
-                (to_basetype(signiture.ox) << isigpos) |
-                (to_basetype(argmode.unused) << idpos) |
-                (to_basetype(argmode.unused) << ilpos) |
-                (to_basetype(argmode.unused) << irpos) |
-                (to_basetype(argmode.unused) << ispos) |
-                (to_basetype(x) << ixpos)};
+                (cast(signiture.ox) << isigpos) |
+                (cast(argmode.unused) << idpos) |
+                (cast(argmode.unused) << ilpos) |
+                (cast(argmode.unused) << irpos) |
+                (cast(argmode.unused) << ispos) |
+                (cast(x) << ixpos)};
         }
 
         pub fn sig(self: info) signiture
@@ -161,17 +160,17 @@ pub const instruction = extern struct
         {
             try std.testing.expectEqual(opcode_count, infos.len);
 
-            try std.testing.expectEqualStrings("add", info.of(.add).name());
-            try std.testing.expectEqualStrings("sub", info.of(.sub).name());
-            try std.testing.expectEqualStrings("mul", info.of(.mul).name());
-            try std.testing.expectEqualStrings("div", info.of(.div).name());
+            try std.testing.expectEqualStrings("iadd", info.of(.iadd).name());
+            try std.testing.expectEqualStrings("isub", info.of(.isub).name());
+            try std.testing.expectEqualStrings("imul", info.of(.imul).name());
+            try std.testing.expectEqualStrings("idiv", info.of(.idiv).name());
 
-            try std.testing.expectEqual(signiture.odlr, info.of(.add).sig());
-            try std.testing.expectEqual(argmode.reg,    info.of(.add).dmode());
-            try std.testing.expectEqual(argmode.rk,     info.of(.add).lmode());
-            try std.testing.expectEqual(argmode.rk,     info.of(.add).rmode());
-            try std.testing.expectEqual(argmode.unused, info.of(.add).smode());
-            try std.testing.expectEqual(argmode.unused, info.of(.add).xmode());
+            try std.testing.expectEqual(signiture.odlr, info.of(.iadd).sig());
+            try std.testing.expectEqual(argmode.reg,    info.of(.iadd).dmode());
+            try std.testing.expectEqual(argmode.rk,     info.of(.iadd).lmode());
+            try std.testing.expectEqual(argmode.rk,     info.of(.iadd).rmode());
+            try std.testing.expectEqual(argmode.unused, info.of(.iadd).smode());
+            try std.testing.expectEqual(argmode.unused, info.of(.iadd).xmode());
         }
     };
 
@@ -318,12 +317,12 @@ pub const instruction = extern struct
         // run info tests
         _ = info;
 
-        const ins_odlr = instruction.odlr(.add, 3, 32,16);
+        const ins_odlr = instruction.odlr(.iadd, 3, 32,16);
         const ins_ods  = instruction.ods(.mov, 1, 8);
         const ins_ox   = instruction.ox(.jmp, 420);
 
-        try std.testing.expectEqualStrings("add", ins_odlr.get_info().name());
-        try std.testing.expectEqual(opcode.add, ins_odlr.get_op());
+        try std.testing.expectEqualStrings("iadd", ins_odlr.get_info().name());
+        try std.testing.expectEqual(opcode.iadd, ins_odlr.get_op());
 
         try std.testing.expectEqualStrings("mov", ins_ods.get_info().name());
         try std.testing.expectEqual(opcode.mov, ins_ods.get_op());
@@ -331,41 +330,45 @@ pub const instruction = extern struct
         try std.testing.expectEqualStrings("jmp", ins_ox.get_info().name());
         try std.testing.expectEqual(opcode.jmp, ins_ox.get_op());
 
-        const args_odlr = instruction.decode(.add, ins_odlr);
+        const args_odlr = instruction.decode(.iadd, ins_odlr);
         const args_ods  = instruction.decode(.mov, ins_ods);
         const args_ox   = instruction.decode(.jmp, ins_ox);
 
-        try std.testing.expectEqual(@as(u8,3), args_odlr.d);
-        try std.testing.expectEqual(@as(u9,32), args_odlr.l);
-        try std.testing.expectEqual(@as(u9,16), args_odlr.r);
+        try std.testing.expectEqual(@as(u18,3), args_odlr.d);
+        try std.testing.expectEqual(@as(u19,32), args_odlr.l);
+        try std.testing.expectEqual(@as(u19,16), args_odlr.r);
 
-        try std.testing.expectEqual(@as(u8,1), args_ods.d);
-        try std.testing.expectEqual(@as(u18,8), args_ods.s);
+        try std.testing.expectEqual(@as(u18,1), args_ods.d);
+        try std.testing.expectEqual(@as(u38,8), args_ods.s);
 
-        try std.testing.expectEqual(@as(u26,420), args_ox.x);
+        try std.testing.expectEqual(@as(u56,420), args_ox.x);
     }
 
 
     // ********************************************************************************
     const infos = [_]info
     {
-        info.odlr("add",   .reg, .rk, .rk),
-        info.odlr("sub",   .reg, .rk, .rk),
-        info.odlr("mul",   .reg, .rk, .rk),
-        info.odlr("div",   .reg, .rk, .rk),
-        info.odlr("mod",   .reg, .rk, .rk),
-        info.odlr("land",  .reg, .rk, .rk),
-        info.odlr("lor",   .reg, .rk, .rk),
-        info.odlr("lnot",  .reg, .rk, .rk),
-        info.odlr("eq",    .reg, .rk, .rk),
-        info.odlr("ne",    .reg, .rk, .rk),
-        info.odlr("lt",    .reg, .rk, .rk),
-        info.odlr("le",    .reg, .rk, .rk),
+        info.odlr("iadd",   .reg, .rk, .rk),
+        info.odlr("isub",   .reg, .rk, .rk),
+        info.odlr("imul",   .reg, .rk, .rk),
+        info.odlr("idiv",   .reg, .rk, .rk),
+        info.odlr("fadd",   .reg, .rk, .rk),
+        info.odlr("fsub",   .reg, .rk, .rk),
+        info.odlr("fmul",   .reg, .rk, .rk),
+        info.odlr("fdiv",   .reg, .rk, .rk),
+        // info.odlr("mod",   .reg, .rk, .rk),
+        // info.odlr("land",  .reg, .rk, .rk),
+        // info.odlr("lor",   .reg, .rk, .rk),
+        // info.odlr("lnot",  .reg, .rk, .rk),
+        // info.odlr("eq",    .reg, .rk, .rk),
+        // info.odlr("ne",    .reg, .rk, .rk),
+        // info.odlr("lt",    .reg, .rk, .rk),
+        // info.odlr("le",    .reg, .rk, .rk),
         info.ods ("mov",   .reg, .rk),
         info.ox  ("jmp",   .ui),
-        info.ods ("call",  .reg, .ui),
-        info.ox  ("ret",   .unused),
-        info.ods ("deref", .reg, .reg),
+        // info.ods ("call",  .reg, .ui),
+        // info.ox  ("ret",   .unused),
+        // info.ods ("deref", .reg, .reg),
     };
 
 

@@ -12,7 +12,7 @@ const value = @import("value.zig").value;
 // ********************************************************************************
 pub const vm = extern struct
 {
-    pub const error_t = error {} || value.error_t;
+    pub const error_t = error { stack_overflow } || value.error_t;
 
     stack: [100]value = undefined,
     kst:   [100]value = undefined,
@@ -27,20 +27,20 @@ pub const vm = extern struct
 
         while(ip < end):(ip += 1) {
             switch(ip.*.get_op()) {
-                .add => {
-                    const args = instruction.decode(.add, ip.*);
+                .iadd => {
+                    const args = instruction.decode(.iadd, ip.*);
                     try value.add(&self.stack[args.d], storage[args.l & 1][args.l >> 1], storage[args.r & 1][args.r >> 1]);
                 },
-                .sub => {
-                    const args = instruction.decode(.sub, ip.*);
+                .isub => {
+                    const args = instruction.decode(.isub, ip.*);
                     try value.sub(&self.stack[args.d], storage[args.l & 1][args.l >> 1], storage[args.r & 1][args.r >> 1]);
                 },
-                .mul => {
-                    const args = instruction.decode(.mul, ip.*);
+                .imul => {
+                    const args = instruction.decode(.imul, ip.*);
                     try value.mul(&self.stack[args.d], storage[args.l & 1][args.l >> 1], storage[args.r & 1][args.r >> 1]);
                 },
-                .div => {
-                    const args = instruction.decode(.div, ip.*);
+                .idiv => {
+                    const args = instruction.decode(.idiv, ip.*);
                     try value.div(&self.stack[args.d], storage[args.l & 1][args.l >> 1], storage[args.r & 1][args.r >> 1]);
                 },
                 else => unreachable,
@@ -61,8 +61,8 @@ test "vm"
 
     const program = [_] instruction
     {
-        instruction.odlr(.add, 0, k(0), k(0)),
-        instruction.odlr(.add, 1, r(0), k(1)),
+        instruction.odlr(.iadd, 0, k(0), k(0)),
+        instruction.odlr(.iadd, 1, r(0), k(1)),
     };
 
     egovm.kst[0] = value {.ty = .integral, .as = .{.integral = 5}};
