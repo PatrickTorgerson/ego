@@ -5,7 +5,9 @@
 
 ego is an interperated language with [gradual typing](https://en.wikipedia.org/wiki/Gradual_typing).
 Variables can be statically typed and participate in static type checking, or dynamcally typed where type
-errors must be checked and reported at runtime.
+errors will be checked and reported at runtime.
+
+---
 
 ## contents
 
@@ -23,6 +25,7 @@ errors must be checked and reported at runtime.
     - [switch](#controlflow_switch)
     - [for](#controlflow_for)
     - [func](#controlflow_func)
+    - [explicit block ends](#controlflow_end)
 - [user defined types](#usertypes)
     - [structure](#usertypes_struct)
     - [interface](#usertypes_interface)
@@ -31,6 +34,8 @@ errors must be checked and reported at runtime.
 - [methods](#methods)
 
 <a name="variables"></a>
+
+---
 
 ## variables
 
@@ -75,23 +80,25 @@ ego supports the following builtin types:
 
 - `int` : 64 bit signed integer
 - `float` : 64 bit floating point
-- `bool` : `true` or `false`
+- `bool` : 8 bit boolean `true` or `false`
 - `string` : UTF-8 string
+- `byte` : 8 bit unsigned int
+- `codepoint` : 32 bit Unicode codepoint
 
-ego also supports several builtin compund data types:
+ego also supports several builtin container types:
 
-- arrays: fixed size sequence of simalarly typed values
-- list: dynamically sized sequence of arbitrarily typed values
-- map: dynamically sized table of key value pairs
+- `arrays`: fixed sized sequence of simalarly typed values
+- `list`: dynamically sized array
+- `map`: dynamically sized table of key value pairs
 
-Constants can be declared with the `const` keyword. Constants are always statically types and connot
+Constants can be declared with the `const` keyword. Constants are always statically typed and cannot
 be re-asigned.
 
 ```go
 const pi = 3.14159265358927 // type is infered as float
 const e any = 2.71828 // ERR constants must have concrete type
 
-pi = 7 // ERR connot asign to constatn `pi`
+pi = 7 // ERR cannot asign to constant `pi`
 ```
 
 <a name="references"></a>
@@ -127,11 +134,21 @@ pi = 7 // ERR connot asign to constatn `pi`
 
 > TODO
 
+utf8
+
+```go
+var s = "hello string"
+```
+
 <a name="arrays"></a>
 
 ## arrays
 
 > TODO
+
+```go
+var a = [1,2,3,4,5,6]
+```
 
 <a name="lists"></a>
 
@@ -139,11 +156,30 @@ pi = 7 // ERR connot asign to constatn `pi`
 
 > TODO
 
+```go
+var l = list(int): 1,2,3,4,5
+l.append(77)
+for i,v in l : l[i] = v * 2
+var back = l.pop()
+assert back == 154
+```
+
 <a name="maps"></a>
 
 ## maps
 
 > TODO
+
+```go
+var m = map(string,any)
+    "name" =  "Mayday Monday"
+    "month" = 5
+    "day"   = 26
+    "first" = 1997
+
+for k,v in m
+    print "{k} = {v}"
+```
 
 <a name="controlflow"></a>
 
@@ -159,12 +195,12 @@ pi = 7 // ERR connot asign to constatn `pi`
 
 ```go
 if true
-    print "statement in a block are indented"
+    print "statements in a block are indented"
         print ":(" // ERR unexpected indent
 
 if true : print "colons start a single-line block that end at the next newline"
 
-block
+block // anonymous blocks
     var a = 12
     print "a = {a}"
 print "a = {a}" // ERR variable `a` is out of scope
@@ -203,7 +239,7 @@ switch i
     case 4..40 : print "ranges are neat"
 
     else: print "No other cases matched"
-    case: print ":(" // ERR case blockas connot apear after else block
+    case: print ":(" // ERR case blocks connot appear after else block
 ```
 
 <a name="controlflow_for"></a>
@@ -238,6 +274,40 @@ func name(param param_type) return_type
     return value
 ```
 
+<a name="controlflow_end"></a>
+
+### explicit block ends
+
+> TODO
+
+```go
+func hello()
+end hello
+
+if true
+end if
+
+for i in ints
+end for
+
+block
+    print "yo"
+end block
+
+type cosa = struct
+    name string
+    birthyear int
+    height int
+end struct
+
+var c = cosa
+    name = "Bean Pole"
+    birthyear = 1977
+    height = 12
+end cosa
+
+```
+
 <a name="usertypes"></a>
 
 ## user defined types
@@ -270,8 +340,8 @@ type numeric = int | float
 
 ### value set
 
-A value set describes a type that can represent one value from a set of values. THe type
-is concrete if all values can be representing with a single type.
+A value set describes a type that can represent one value from a set of values. The type
+is concrete if all values can be represented with a single type.
 
 ```go
 type mybool = true | false
@@ -319,10 +389,10 @@ type person = struct
     alive bool = true // optional default initializer
 ```
 
-struct values can be created with a struct initializer. Specify the name of the struct, then a block of field initilizers
+Struct values can be created with a struct initializer. Specify the name of the struct, then a block of field initilizers
 
 ```go
-// all field must be initialized
+// all fields must be initialized
 // fields with defualt initializers can be omitted
 var p = person
     .name = "Patrick"
@@ -352,7 +422,7 @@ p.name = "Horatio Slim"
 print "{p.name}" // Horatio Slim
 ```
 
-structs can be destructured into tuples,
+Structs can be destructured into tuples,
 and tuples can be structured into structs
 
 ```go
@@ -361,6 +431,7 @@ var name,age,height,alive = p
 // structuring
 p = "Wanda", 500, 35, true
 
+print "{name}" // Horatio Slim
 print "{p.name}" // Wanda
 ```
 
@@ -373,26 +444,31 @@ followed by a block of [method](#methode) signitures.
 
 ```go
 type serial = interface
-    serialize() string
-    deserialize(string) &this
+    method serialize() string
+    method& deserialize(string) &this
+    func deserialize(string) this
 
     // maybe C++20 style requires expressions?
     // requires(t this) : t == t.deserialize(t.serialize())
 
-func file.write_value(value serial)
-    file.write_string(value.serialize())
+method file::write_value(value serial)
+    .write_string(value.serialize())
 ```
 
 To have a type support an interface simply implement the necessary [methods](#methods).
 If you want to ensure a particular interface is implemented on a given type you can use the `is` operator.
 
 ```go
-method person.serialize() string
+method person::serialize() string
     return fmt "person: .name='{.name}', .age={.age}, .height={.height}, .alive={.alive};"
 
-method person.deserialize(str string) &person
+method& person::deserialize(str string) &person
     this = scan str "person: .name='{:s}', .age={:d}, .height={:d}, .alive={:b};"
     return this
+
+func person::deserialize(str string) person
+    var new_person = person: "",0,0
+    return new_person.deserialize(str)
 
 assert(person is serial)
 ```
@@ -400,6 +476,8 @@ assert(person is serial)
 <a name="usertypes_enum"></a>
 
 ### enumeration
+
+> TODO
 
 An enumeration is an enumeration. enumeration.
 
@@ -415,12 +493,12 @@ var dir = direction.north
 
 ## namespacing
 
-declarations can be added to a namespace by preceding it's name with a namespace specifier.
+Declarations can be added to a namespace by preceding it's name with a namespace specifier.
 
 ```go
-const math.pi = 3.1415
+const math::pi = 3.1415
 
-func math.square(n numeric) numeric : return n*n
+func math::square(n numeric) numeric : return n*n
 ```
 
 <a name="methods"></a>
@@ -428,12 +506,12 @@ func math.square(n numeric) numeric : return n*n
 ## methods
 
 Methods are functions that can be called on a value with a period. A method declaration must
-be namespaces to the type it's called on. A reference to the
+be namespaced to the type it's called on. A reference to the
 value the method is being called on can be obtained with the `this` keyword. If the value
 is of struct type, member access can can have the `this` keyword omited. `this.age == .age`
 
 ```go
-method person.output()
+method person::output()
     if .alive
         print "person: {.name}, {.age} years, {.height}cm"
     else
@@ -442,15 +520,16 @@ method person.output()
 p.output() // person: Wanda, 500 years, 35cm
 (person: "Bob",0,0,false).output() // RIP Bob
 
-// 'this' reference is immutable be defualt
-method person.happy_birthday()
+// 'this' reference is immutable by defualt
+method person::happy_birthday()
     .age += 1 // ERR connot assign to member of immutable reference `this`
 
-method &person.happy_birthday()
+// use an ampersand for mutable this
+method& person::happy_birthday()
     .age += 1 // OK `this` is mutable
 
-method int.squared() int
+method int::squared() int
     return this * this
 
-const sqr = 5.squared()
+const sqr = 5.squared() // 25
 ```

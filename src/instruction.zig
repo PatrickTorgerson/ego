@@ -9,21 +9,22 @@ const std = @import("std");
 const assert = std.debug.assert;
 const Log2Int = std.math.Log2Int;
 
-pub const instruction = extern struct
+
+pub const Instruction = extern struct
 {
 
     // instruction argument sizes
-    const osize = 8;  // 256
-    const dsize = 18;  // 262'144
-    const lsize = 19;  // 524'288
-    const rsize = 19;  // 524'288
+    const osize = 6;
+    const dsize = 8;
+    const lsize = 9;
+    const rsize = 9;
     const ssize = lsize + rsize;
     const xsize = dsize + ssize;
 
     /// size of an ego instruction in bits
     pub const bitsize = osize + xsize;
     /// underlying type for ego instruction
-    pub const basetype = std.meta.Int(.unsigned, bitsize);
+    pub const Basetype = std.meta.Int(.unsigned, bitsize);
 
     // instruction argument positions
     const opos = 0;
@@ -34,43 +35,44 @@ pub const instruction = extern struct
     const xpos = dpos;
 
     // instruction argument masks
-    const omask = mask1(basetype, opos, osize);
-    const dmask = mask1(basetype, dpos, dsize);
-    const lmask = mask1(basetype, lpos, lsize);
-    const rmask = mask1(basetype, rpos, rsize);
-    const smask = mask1(basetype, spos, ssize);
-    const xmask = mask1(basetype, xpos, xsize);
+    const omask = mask1(Basetype, opos, osize);
+    const dmask = mask1(Basetype, dpos, dsize);
+    const lmask = mask1(Basetype, lpos, lsize);
+    const rmask = mask1(Basetype, rpos, rsize);
+    const smask = mask1(Basetype, spos, ssize);
+    const xmask = mask1(Basetype, xpos, xsize);
 
 
     // ********************************************************************************
-    pub const opcode = enum(c_int)
+    pub const Opcode = enum(c_int)
     {
-        iadd, isub, imul, idiv,
-        fadd, fsub, fmul, fdiv,
-        // mod,
-        // band, bor, bnot, lsh, rsh,
-        // land, lor, lnot,
-        // eq, ne, lt, le,
-        mov,
-        jmp,
-        // call,
+        // arithmatic
+        addi, subi, muli, divi, // negi, modi,
+        addf, subf, mulf, divf, // negf, modf,
+        // itof, ftoi,
+        // band, bor, bxor, bnot, lsh, rsh,
+        // cmpi, cmpf,
+        // eq, ne, lt, le, tru, fls,
+        // mov,
+        // jmp, jeq, jne, jlt, jle,
+        // call, tcall,
         // ret,
         // deref,
 
         COUNT
     };
-    const opcode_count = @enumToInt(opcode.COUNT);
+    const opcode_count = @enumToInt(Opcode.COUNT);
 
 
     // ********************************************************************************
-    pub const signiture = enum(c_int)
+    pub const Signiture = enum(c_int)
     {
         odlr, ods, ox
     };
 
 
     // ********************************************************************************
-    pub const argmode = enum(c_int)
+    pub const Argmode = enum(c_int)
     {
         unused, reg, kst, rk, ui, si
     };
@@ -78,7 +80,7 @@ pub const instruction = extern struct
 
     // ********************************************************************************
     /// instruction reflection
-    pub const info = extern struct
+    pub const Info = extern struct
     {
         name_ptr: [*:0]const u8,
         bits: u32,
@@ -99,53 +101,53 @@ pub const instruction = extern struct
         fn cast(e: anytype) u32
         { return @intCast(u32, @enumToInt(e)); }
 
-        pub fn odlr(name_ptr:[:0]const u8, d:argmode, l:argmode, r:argmode) info
+        pub fn odlr(name_ptr:[:0]const u8, d: Argmode, l: Argmode, r: Argmode) Info
         {
-            return info { .name_ptr = name_ptr, .bits =
+            return Info { .name_ptr = name_ptr, .bits =
                 @as(u32,0) |
-                (cast(signiture.odlr) << isigpos) |
+                (cast(Signiture.odlr) << isigpos) |
                 (cast(d) << idpos) |
                 (cast(l) << ilpos) |
                 (cast(r) << irpos) |
-                (cast(argmode.unused) << ispos) |
-                (cast(argmode.unused) << ixpos)};
+                (cast(Argmode.unused) << ispos) |
+                (cast(Argmode.unused) << ixpos)};
         }
-        pub fn ods(name_ptr:[:0]const u8, d:argmode, s:argmode) info
+        pub fn ods(name_ptr:[:0]const u8, d: Argmode, s: Argmode) Info
         {
-            return info { .name_ptr = name_ptr, .bits =
+            return Info { .name_ptr = name_ptr, .bits =
                 @as(u32,0) |
-                (cast(signiture.ods) << isigpos) |
+                (cast(Signiture.ods) << isigpos) |
                 (cast(d) << idpos) |
-                (cast(argmode.unused) << ilpos) |
-                (cast(argmode.unused) << irpos) |
+                (cast(Argmode.unused) << ilpos) |
+                (cast(Argmode.unused) << irpos) |
                 (cast(s) << ispos) |
-                (cast(argmode.unused) << ixpos)};
+                (cast(Argmode.unused) << ixpos)};
         }
-        pub fn ox(name_ptr:[:0]const u8, x:argmode) info
+        pub fn ox(name_ptr:[:0]const u8, x:Argmode) Info
         {
-            return info { .name_ptr = name_ptr, .bits =
+            return Info { .name_ptr = name_ptr, .bits =
                 @as(u32,0) |
-                (cast(signiture.ox) << isigpos) |
-                (cast(argmode.unused) << idpos) |
-                (cast(argmode.unused) << ilpos) |
-                (cast(argmode.unused) << irpos) |
-                (cast(argmode.unused) << ispos) |
+                (cast(Signiture.ox) << isigpos) |
+                (cast(Argmode.unused) << idpos) |
+                (cast(Argmode.unused) << ilpos) |
+                (cast(Argmode.unused) << irpos) |
+                (cast(Argmode.unused) << ispos) |
                 (cast(x) << ixpos)};
         }
 
-        pub fn sig(self: info) signiture
-        { return @intToEnum(signiture, (self.bits & isigmask) >> isigpos); }
-        pub fn dmode(self: info) argmode
-        { return @intToEnum(argmode, (self.bits & idmask) >> idpos); }
-        pub fn lmode(self: info) argmode
-        { return @intToEnum(argmode, (self.bits & ilmask) >> ilpos); }
-        pub fn rmode(self: info) argmode
-        { return @intToEnum(argmode, (self.bits & irmask) >> irpos); }
-        pub fn smode(self: info) argmode
-        { return @intToEnum(argmode, (self.bits & ismask) >> ispos); }
-        pub fn xmode(self: info) argmode
-        { return @intToEnum(argmode, (self.bits & ixmask) >> ixpos); }
-        pub fn name(self: info) []const u8
+        pub fn sig(self: Info) Signiture
+        { return @intToEnum(Signiture, (self.bits & isigmask) >> isigpos); }
+        pub fn dmode(self: Info) Argmode
+        { return @intToEnum(Argmode, (self.bits & idmask) >> idpos); }
+        pub fn lmode(self: Info) Argmode
+        { return @intToEnum(Argmode, (self.bits & ilmask) >> ilpos); }
+        pub fn rmode(self: Info) Argmode
+        { return @intToEnum(Argmode, (self.bits & irmask) >> irpos); }
+        pub fn smode(self: Info) Argmode
+        { return @intToEnum(Argmode, (self.bits & ismask) >> ispos); }
+        pub fn xmode(self: Info) Argmode
+        { return @intToEnum(Argmode, (self.bits & ixmask) >> ixpos); }
+        pub fn name(self: Info) []const u8
         {
             var slice: []const u8 = undefined;
             slice.ptr = self.name_ptr;
@@ -153,102 +155,99 @@ pub const instruction = extern struct
             return slice;
         }
 
-        pub fn of(op: opcode) info
+        pub fn of(op: Opcode) Info
         { return infos[@intCast(usize, @enumToInt(op))]; }
 
         test "info"
         {
             try std.testing.expectEqual(opcode_count, infos.len);
 
-            try std.testing.expectEqualStrings("iadd", info.of(.iadd).name());
-            try std.testing.expectEqualStrings("isub", info.of(.isub).name());
-            try std.testing.expectEqualStrings("imul", info.of(.imul).name());
-            try std.testing.expectEqualStrings("idiv", info.of(.idiv).name());
+            try std.testing.expectEqualStrings("addi", Info.of(.addi).name());
 
-            try std.testing.expectEqual(signiture.odlr, info.of(.iadd).sig());
-            try std.testing.expectEqual(argmode.reg,    info.of(.iadd).dmode());
-            try std.testing.expectEqual(argmode.rk,     info.of(.iadd).lmode());
-            try std.testing.expectEqual(argmode.rk,     info.of(.iadd).rmode());
-            try std.testing.expectEqual(argmode.unused, info.of(.iadd).smode());
-            try std.testing.expectEqual(argmode.unused, info.of(.iadd).xmode());
+            try std.testing.expectEqual(Signiture.odlr, Info.of(.addi).sig());
+            try std.testing.expectEqual(Argmode.reg,    Info.of(.addi).dmode());
+            try std.testing.expectEqual(Argmode.rk,     Info.of(.addi).lmode());
+            try std.testing.expectEqual(Argmode.rk,     Info.of(.addi).rmode());
+            try std.testing.expectEqual(Argmode.unused, Info.of(.addi).smode());
+            try std.testing.expectEqual(Argmode.unused, Info.of(.addi).xmode());
         }
     };
 
 
     // instruction bitfield
-    bits: basetype,
+    bits: Basetype,
 
 
     // ********************************************************************************
-    pub fn get_op(self: instruction) opcode
+    pub fn get_op(self: Instruction) Opcode
     {
-        return @intToEnum(opcode, self.bits & omask);
+        return @intToEnum(Opcode, self.bits & omask);
     }
 
 
     // ********************************************************************************
-    pub fn get_info(self: instruction) info
+    pub fn get_info(self: Instruction) Info
     {
         return infos[self.bits & omask];
     }
 
 
     // ********************************************************************************
-    pub fn odlr(comptime op: opcode, d: basetype, l: basetype, r: basetype) instruction
+    pub fn odlr(comptime op: Opcode, d: Basetype, l: Basetype, r: Basetype) Instruction
     {
-        comptime assert(info.of(op).sig() == .odlr);
-        return instruction { .bits =
-            @as(basetype,0) |
-            (@intCast(basetype, @enumToInt(op)) << opos) |
-            ((d & mask1(basetype, 0, dsize)) << dpos) |
-            ((l & mask1(basetype, 0, lsize)) << lpos) |
-            ((r & mask1(basetype, 0, rsize)) << rpos) };
+        comptime assert(Info.of(op).sig() == .odlr);
+        return Instruction { .bits =
+            @as(Basetype,0) |
+            (@intCast(Basetype, @enumToInt(op)) << opos) |
+            ((d & mask1(Basetype, 0, dsize)) << dpos) |
+            ((l & mask1(Basetype, 0, lsize)) << lpos) |
+            ((r & mask1(Basetype, 0, rsize)) << rpos) };
     }
 
 
     // ********************************************************************************
-    pub fn ods(comptime op: opcode, d: basetype, s: basetype) instruction
+    pub fn ods(comptime op: Opcode, d: Basetype, s: Basetype) Instruction
     {
-        comptime assert(info.of(op).sig() == .ods);
-        return instruction { .bits =
-            @as(basetype,0) |
-            (@intCast(basetype, @enumToInt(op)) << opos) |
-            ((d & mask1(basetype, 0, dsize)) << dpos) |
-            ((s & mask1(basetype, 0, ssize)) << spos) };
+        comptime assert(Info.of(op).sig() == .ods);
+        return Instruction { .bits =
+            @as(Basetype,0) |
+            (@intCast(Basetype, @enumToInt(op)) << opos) |
+            ((d & mask1(Basetype, 0, dsize)) << dpos) |
+            ((s & mask1(Basetype, 0, ssize)) << spos) };
     }
 
 
     // ********************************************************************************
-    pub fn ox(comptime op: opcode, x: basetype) instruction
+    pub fn ox(comptime op: Opcode, x: Basetype) Instruction
     {
-        comptime assert(info.of(op).sig() == .ox);
-        return instruction { .bits =
-            @as(basetype,0) |
-            (@intCast(basetype, @enumToInt(op)) << opos) |
-            ((x & mask1(basetype, 0, xsize)) << xpos) };
+        comptime assert(Info.of(op).sig() == .ox);
+        return Instruction { .bits =
+            @as(Basetype,0) |
+            (@intCast(Basetype, @enumToInt(op)) << opos) |
+            ((x & mask1(Basetype, 0, xsize)) << xpos) };
     }
 
 
     // ********************************************************************************
     /// returns a struct containing the instruction's arguments
-    pub fn decode(comptime op: opcode, self: instruction) decoded_t(op)
+    pub fn decode(comptime op: Opcode, self: Instruction) DecodedIns(op)
     {
         assert(op == self.get_op());
 
-        const inf = comptime info.of(op);
+        const inf = comptime Info.of(op);
 
         switch(comptime inf.sig()) {
-            .odlr => return decoded_t(op){
-                .d = extract_bits(argty(op, .d), dpos, dsize, self.bits),
-                .l = extract_bits(argty(op, .l), lpos, lsize, self.bits),
-                .r = extract_bits(argty(op, .r), rpos, rsize, self.bits),
+            .odlr => return DecodedIns(op){
+                .d = extract_bits(ArgTy(op, .d), dpos, dsize, self.bits),
+                .l = extract_bits(ArgTy(op, .l), lpos, lsize, self.bits),
+                .r = extract_bits(ArgTy(op, .r), rpos, rsize, self.bits),
             },
-            .ods => return decoded_t(op){
-                .d = extract_bits(argty(op, .d), dpos, dsize, self.bits),
-                .s = extract_bits(argty(op, .s), spos, ssize, self.bits),
+            .ods => return DecodedIns(op){
+                .d = extract_bits(ArgTy(op, .d), dpos, dsize, self.bits),
+                .s = extract_bits(ArgTy(op, .s), spos, ssize, self.bits),
             },
-            .ox => return decoded_t(op){
-                .x = extract_bits(argty(op, .x), xpos, xsize, self.bits),
+            .ox => return DecodedIns(op){
+                .x = extract_bits(ArgTy(op, .x), xpos, xsize, self.bits),
             },
         }
     }
@@ -256,11 +255,11 @@ pub const instruction = extern struct
 
     // ********************************************************************************
     /// struct containing decoded instruction arguments
-    fn decoded_t(comptime op: opcode) type
+    fn DecodedIns(comptime op: Opcode) type
     {
-        const inf = comptime info.of(op);
+        const inf = comptime Info.of(op);
 
-        return switch (inf.sig()) {
+        return switch (comptime inf.sig()) {
             .odlr => struct {
                 d: switch (inf.dmode()) {
                     .unused => void,
@@ -307,56 +306,57 @@ pub const instruction = extern struct
 
     /// ********************************************************************************
     /// helper to return the type of an instruction argument
-    fn argty(comptime op: opcode, comptime field: std.meta.FieldEnum(decoded_t(op))) type {
-        return std.meta.fieldInfo(decoded_t(op), field).field_type;
+    fn ArgTy(comptime op: Opcode, comptime field: std.meta.FieldEnum(DecodedIns(op))) type {
+        return std.meta.fieldInfo(DecodedIns(op), field).field_type;
     }
 
 
     test "instruction"
     {
         // run info tests
-        _ = info;
+        _ = Info;
 
-        const ins_odlr = instruction.odlr(.iadd, 3, 32,16);
-        const ins_ods  = instruction.ods(.mov, 1, 8);
-        const ins_ox   = instruction.ox(.jmp, 420);
+        const ins_odlr = Instruction.odlr(.addi, 3, 32, 16);
+        // const ins_ods  = instruction.ods(.mov, 1, 8);
+        // const ins_ox   = instruction.ox(.jmp, 420);
 
-        try std.testing.expectEqualStrings("iadd", ins_odlr.get_info().name());
-        try std.testing.expectEqual(opcode.iadd, ins_odlr.get_op());
+        try std.testing.expectEqualStrings("addi", ins_odlr.get_info().name());
+        try std.testing.expectEqual(Opcode.addi, ins_odlr.get_op());
 
-        try std.testing.expectEqualStrings("mov", ins_ods.get_info().name());
-        try std.testing.expectEqual(opcode.mov, ins_ods.get_op());
+//         try std.testing.expectEqualStrings("mov", ins_ods.get_info().name());
+//         try std.testing.expectEqual(opcode.mov, ins_ods.get_op());
+//
+//         try std.testing.expectEqualStrings("jmp", ins_ox.get_info().name());
+//         try std.testing.expectEqual(opcode.jmp, ins_ox.get_op());
 
-        try std.testing.expectEqualStrings("jmp", ins_ox.get_info().name());
-        try std.testing.expectEqual(opcode.jmp, ins_ox.get_op());
-
-        const args_odlr = instruction.decode(.iadd, ins_odlr);
-        const args_ods  = instruction.decode(.mov, ins_ods);
-        const args_ox   = instruction.decode(.jmp, ins_ox);
+        const args_odlr = Instruction.decode(.addi, ins_odlr);
+        // const args_ods  = instruction.decode(.mov, ins_ods);
+        // const args_ox   = instruction.decode(.jmp, ins_ox);
 
         try std.testing.expectEqual(@as(u18,3), args_odlr.d);
         try std.testing.expectEqual(@as(u19,32), args_odlr.l);
         try std.testing.expectEqual(@as(u19,16), args_odlr.r);
 
-        try std.testing.expectEqual(@as(u18,1), args_ods.d);
-        try std.testing.expectEqual(@as(u38,8), args_ods.s);
-
-        try std.testing.expectEqual(@as(u56,420), args_ox.x);
+//         try std.testing.expectEqual(@as(u18,1), args_ods.d);
+//         try std.testing.expectEqual(@as(u38,8), args_ods.s);
+//
+//         try std.testing.expectEqual(@as(u56,420), args_ox.x);
     }
 
 
     // ********************************************************************************
-    const infos = [_]info
+    const infos = [_]Info
     {
-        info.odlr("iadd",   .reg, .rk, .rk),
-        info.odlr("isub",   .reg, .rk, .rk),
-        info.odlr("imul",   .reg, .rk, .rk),
-        info.odlr("idiv",   .reg, .rk, .rk),
-        info.odlr("fadd",   .reg, .rk, .rk),
-        info.odlr("fsub",   .reg, .rk, .rk),
-        info.odlr("fmul",   .reg, .rk, .rk),
-        info.odlr("fdiv",   .reg, .rk, .rk),
-        // info.odlr("mod",   .reg, .rk, .rk),
+        Info.odlr("addi",   .reg, .rk, .rk),
+        Info.odlr("subi",   .reg, .rk, .rk),
+        Info.odlr("muli",   .reg, .rk, .rk),
+        Info.odlr("divi",   .reg, .rk, .rk),
+
+        Info.odlr("addf",   .reg, .rk, .rk),
+        Info.odlr("subf",   .reg, .rk, .rk),
+        Info.odlr("mulf",   .reg, .rk, .rk),
+        Info.odlr("divf",   .reg, .rk, .rk),
+
         // info.odlr("land",  .reg, .rk, .rk),
         // info.odlr("lor",   .reg, .rk, .rk),
         // info.odlr("lnot",  .reg, .rk, .rk),
@@ -364,8 +364,8 @@ pub const instruction = extern struct
         // info.odlr("ne",    .reg, .rk, .rk),
         // info.odlr("lt",    .reg, .rk, .rk),
         // info.odlr("le",    .reg, .rk, .rk),
-        info.ods ("mov",   .reg, .rk),
-        info.ox  ("jmp",   .ui),
+        // info.odlr("mov",   .reg, .rk, .ui),
+        // info.ox  ("jmp",   .ui),
         // info.ods ("call",  .reg, .ui),
         // info.ox  ("ret",   .unused),
         // info.ods ("deref", .reg, .reg),
@@ -403,12 +403,12 @@ pub const instruction = extern struct
 
     /// ********************************************************************************
     /// returns the 'size' bits at the pos 'pos' from 'ins'
-    fn extract_bits(comptime T: type, pos: comptime_int, size: comptime_int, ins: basetype) T
+    fn extract_bits(comptime T: type, pos: comptime_int, size: comptime_int, ins: Basetype) T
     {
         comptime assert(@typeInfo(T) == .Int);
         comptime assert(std.meta.bitCount(T) >= size);
 
-        return @intCast(T, (ins >> pos) & mask1(basetype, 0, size));
+        return @intCast(T, (ins >> pos) & mask1(Basetype, 0, size));
     }
 
 
