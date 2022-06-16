@@ -4,7 +4,7 @@
 [![Last Commit](https://img.shields.io/github/last-commit/PatrickTorgerson/ego)](https://github.com/PatrickTorgerson/ego/commits/main)
 [![Code Size](https://img.shields.io/github/languages/code-size/PatrickTorgerson/ego)](https://github.com/PatrickTorgerson/ego)
 
-Small interpreted scripting language with a focus on speed and embedability
+Small toy interpreted scripting language written in Zig
 
 ## Example
 
@@ -15,32 +15,15 @@ Small interpreted scripting language with a focus on speed and embedability
 type vec2 = struct
     x,y numeric
 
-method vec2.lensqrd() numeric
+method vec2::lensqrd() numeric
     return .x * .x + .y * .y
 
-method vec2.len() numeric
+method vec2::len() numeric
     return math.sqrt(.lensqrd())
 
-operator +(l,r vec2) vec2
-    return vec2: l.x + r.x, l.y + r.y
-
-operator *(l vec2, r numeric) vec2
-    return vec2: l.x * r, l.y * r
-
-
-var pos = vec2: 0,0
-var vel = vec2: 1,1
-
-
-func physics_step(delta_time float)
-    pos += vel * delta_time
-
-
-for simulation.running()
-    physics_step(frametime())
+var pos = vec2: 1,1
+assert(pos.len() == 1.4142)
 ```
-
-For a complete overview of ego see [overview.md](https://github.com/PatrickTorgerson/ego/blob/main/overview.md)
 
 ## Licence
 

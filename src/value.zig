@@ -8,7 +8,7 @@ const std = @import("std");
 
 
 // ********************************************************************************
-pub const builtin = enum(c_int)
+pub const Builtin = enum(c_int)
 {
     integral, floating,
     nil
@@ -16,11 +16,11 @@ pub const builtin = enum(c_int)
 
 
 // ********************************************************************************
-pub const value = extern struct
+pub const Value = extern struct
 {
-    pub const error_t = error {type_mismatch, invalid_argument, divide_by_zero};
+    pub const Error = error {type_mismatch, invalid_argument, divide_by_zero};
 
-    ty: builtin = .nil,
+    ty: Builtin = .nil,
     as: extern union {
         integral: i64,
         floating: f64,
@@ -29,30 +29,30 @@ pub const value = extern struct
 
 
     // ********************************************************************************
-    pub fn integral(i: i64) value
+    pub fn integral(i: i64) Value
     {
-        return value{.ty=.integral,.as=.{.integral=i}};
+        return Value{.ty=.integral,.as=.{.integral=i}};
     }
 
 
     // ********************************************************************************
-    pub fn floating(f: f64) value
+    pub fn floating(f: f64) Value
     {
-        return value{.ty=.floating,.as=.{.floating=f}};
+        return Value{.ty=.floating,.as=.{.floating=f}};
     }
 
 
     // ********************************************************************************
-    pub fn add(dest: *value, l: value, r: value) error_t!void
+    pub fn add(dest: *Value, l: Value, r: Value) Error!void
     {
         if(l.ty != r.ty)
-            return error_t.type_mismatch;
+            return Error.type_mismatch;
 
         switch(l.ty)
         {
             .integral => dest.*.as.integral = l.as.integral + r.as.integral,
             .floating => dest.*.as.floating = l.as.floating + r.as.floating,
-            else => return error_t.invalid_argument,
+            else => return Error.invalid_argument,
         }
 
         dest.*.ty = l.ty;
@@ -60,16 +60,16 @@ pub const value = extern struct
 
 
     // ********************************************************************************
-    pub fn sub(dest: *value, l: value, r: value) error_t!void
+    pub fn sub(dest: *Value, l: Value, r: Value) Error!void
     {
         if(l.ty != r.ty)
-            return error_t.type_mismatch;
+            return Error.type_mismatch;
 
         switch(l.ty)
         {
             .integral => dest.*.as.integral = l.as.integral - r.as.integral,
             .floating => dest.*.as.floating = l.as.floating - r.as.floating,
-            else => return error_t.invalid_argument,
+            else => return Error.invalid_argument,
         }
 
         dest.*.ty = l.ty;
@@ -77,16 +77,16 @@ pub const value = extern struct
 
 
     // ********************************************************************************
-    pub fn mul(dest: *value, l: value, r: value) error_t!void
+    pub fn mul(dest: *Value, l: Value, r: Value) Error!void
     {
         if(l.ty != r.ty)
-            return error_t.type_mismatch;
+            return Error.type_mismatch;
 
         switch(l.ty)
         {
             .integral => dest.*.as.integral = l.as.integral * r.as.integral,
             .floating => dest.*.as.floating = l.as.floating * r.as.floating,
-            else => return error_t.invalid_argument,
+            else => return Error.invalid_argument,
         }
 
         dest.*.ty = l.ty;
@@ -94,24 +94,24 @@ pub const value = extern struct
 
 
     // ********************************************************************************
-    pub fn div(dest: *value, l: value, r: value) error_t!void
+    pub fn div(dest: *Value, l: Value, r: Value) Error!void
     {
         if(l.ty != r.ty)
-            return error_t.type_mismatch;
+            return Error.type_mismatch;
 
         switch(l.ty)
         {
             .integral =>
                 if(r.as.integral == 0)
-                { return error_t.divide_by_zero; }
+                { return Error.divide_by_zero; }
                 else
                 { dest.*.as.integral = @divTrunc(l.as.integral, r.as.integral); },
             .floating =>
                 if(r.as.floating == 0.0)
-                { return error_t.divide_by_zero; }
+                { return Error.divide_by_zero; }
                 else
                 { dest.*.as.floating = l.as.floating / r.as.floating; },
-            else => return error_t.invalid_argument,
+            else => return Error.invalid_argument,
         }
 
         dest.*.ty = l.ty;
@@ -121,14 +121,14 @@ pub const value = extern struct
 
 test "value"
 {
-    const il = value.integral(11);
-    const ir = value.integral(4);
-    const fl = value.floating(3.14);
-    const fr = value.floating(1.27);
-    const n  = value{};
+    const il = Value.integral(11);
+    const ir = Value.integral(4);
+    const fl = Value.floating(3.14);
+    const fr = Value.floating(1.27);
+    const n  = Value{};
 
-    var id = value{};
-    var fd = value{};
+    var id = Value{};
+    var fd = Value{};
 
     try id.add(il,ir);
     try fd.add(fl,fr);
@@ -136,6 +136,6 @@ test "value"
     try std.testing.expectEqual(@as(i64,15), id.as.integral);
     try std.testing.expectEqual(@as(f64,4.41), fd.as.floating);
 
-    try std.testing.expectError(value.error_t.type_mismatch, id.add(il,fr));
-    try std.testing.expectError(value.error_t.invalid_argument, id.add(n,n));
+    try std.testing.expectError(Value.Error.type_mismatch, id.add(il,fr));
+    try std.testing.expectError(Value.Error.invalid_argument, id.add(n,n));
 }

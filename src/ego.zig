@@ -6,11 +6,11 @@
 
 const std = @import("std");
 
-pub const instruction = @import("instruction.zig").instruction;
-pub const value = @import("value.zig").value;
-pub const builtin = @import("value.zig").builtin;
-pub const vm = @import("vm.zig").vm;
-pub const lexer = @import("lex.zig").lexer;
+pub const Instruction = @import("instruction.zig").Instruction;
+pub const Value = @import("value.zig").Value;
+pub const Vm = @import("vm.zig").Vm;
+pub const Lexer = @import("lex.zig").Lexer;
+pub const parse = @import("parse.zig");
 
 test "ego"
 {

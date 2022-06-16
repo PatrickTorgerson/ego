@@ -4,87 +4,24 @@
 //! ego uses the MIT license, see LICENSE for more information
 // ********************************************************************************
 
-
 const std = @import("std");
 const assert = std.debug.assert;
 
+const Terminal = @import("grammar.zig").Terminal;
 
 // ********************************************************************************
-pub const lex_type = enum(c_int)
+pub const Lexeme = extern struct
 {
-    plus, minus, star, slash, percent,
-
-    plus_plus,
-    plus_equal, minus_equal, star_equal, slash_equal,
-
-    tilde, pipe, ampersand, carrot,
-
-    equal, equal_equal, bang_equal,
-    lesser, lesser_equal,
-    greater, greater_equal,
-
-    pipe_pipe, ampersand_ampersand,
-
-    identifier,
-
-    ky_var,
-    ky_const,
-    ky_func,
-    ky_method,
-    ky_operator,
-    ky_return,
-    ky_type,
-    ky_struct,
-    ky_interface,
-    ky_enum,
-    ky_if,
-    ky_else,
-    ky_for,
-    ky_switch,
-    ky_case,
-
-    builtin_any,
-    builtin_numeric,
-    builtin_bool,
-    builtin_int,
-    builtin_float,
-    builtin_string,
-
-    literal_int,
-    literal_float,
-    literal_hex,
-    literal_octal,
-    literal_true,
-    literal_false,
-    literal_nil,
-
-    lparen, rparen,
-    lbrace, rbrace,
-    lbracket, rbracket,
-    semicolon, colon,
-    single_quote, double_quote,
-
-    indent,
-
-    eof,
-    invalid,
-};
-
-
-// ********************************************************************************
-pub const lexeme = extern struct
-{
-    ty: lex_type,
+    ty: Terminal,
     start: usize,
     end: usize,
 
     // ********************************************************************************
-    pub const keywords = std.ComptimeStringMap(lex_type, .{
+    pub const keywords = std.ComptimeStringMap(Terminal, .{
         .{ "var", .ky_var},
         .{ "const", .ky_const},
         .{ "func", .ky_func},
         .{ "method", .ky_method},
-        .{ "operator", .ky_operator},
         .{ "return", .ky_return},
         .{ "type", .ky_type},
         .{ "struct", .ky_struct},
@@ -93,24 +30,39 @@ pub const lexeme = extern struct
         .{ "if", .ky_if},
         .{ "else", .ky_else},
         .{ "for", .ky_for},
+        .{ "while", .ky_while },
         .{ "switch", .ky_switch},
         .{ "case", .ky_case},
+        .{ "block", .ky_block},
+        .{ "discard", .ky_discard},
+        .{ "import", .ky_import},
+        .{ "module", .ky_module},
+        .{ "pub", .ky_pub},
+        .{ "error", .ky_error},
+        .{ "catch", .ky_catch},
+        .{ "try", .ky_try},
+        .{ "and", .ky_and},
+        .{ "or", .ky_or},
     });
 
     // ********************************************************************************
-    pub fn get_keyword(bytes: []const u8) ?lex_type {
+    pub fn get_keyword(bytes: []const u8) ?Terminal {
         return keywords.get(bytes);
     }
 };
 
 
 // ********************************************************************************
-pub const lexer = extern struct
+pub const Lexer = extern struct
 {
     source: [*:0]const u8,
     cursor: usize,
+    prev_indent: usize,
+    pending_newline: usize,
 
-    const lex_state = enum(c_int)
+    const npos = ~@as(usize,0);
+
+    const LexState = enum(c_int)
     {
         start,
         plus, minus, star, slash,
@@ -122,65 +74,88 @@ pub const lexer = extern struct
         newline,
     };
 
-
     // ********************************************************************************
-    pub fn init(source: [:0]const u8) lexer
+    pub fn init(source: [:0]const u8) Lexer
     {
         // Skip the UTF-8 BOM if present
-        const start = if (std.mem.startsWith(u8, source, "\xEF\xBB\xBF")) 3 else @as(usize, 0);
-        return lexer {
+        var start = if (std.mem.startsWith(u8, source, "\xEF\xBB\xBF")) 3 else @as(usize, 0);
+        // skip leading newlines
+        while(source[start] == '\n' or source[start] == '\r') start += 1;
+
+        return Lexer {
             .source = source[start..].ptr,
-            .cursor = ~@as(usize,0),
+            .cursor = npos,
+            .prev_indent = 0,
+            .pending_newline = npos,
         };
     }
 
 
     // ********************************************************************************
-    pub fn string(self: lexer, lx: lexeme) []const u8
+    pub fn string(this: Lexer, lx: Lexeme) []const u8
     {
-        return self.source[lx.start..lx.end];
+        return this.source[lx.start..lx.end];
     }
 
 
     // ********************************************************************************
-    pub fn next(self: *lexer) lexeme
+    pub fn next(this: *Lexer) Lexeme
     {
-        var state = lex_state.start;
+        var state = LexState.start;
 
-        var lex = lexeme{
+        var lex = Lexeme{
             .ty = .eof,
-            .start = self.cursor,
+            .start = this.cursor,
             .end = undefined,
         };
 
-        if(self.cursor == ~@as(usize,0))
+        // initial indent lexeme
+        if(this.cursor == npos)
         {
-            self.cursor = 0;
-            lex.start = self.cursor;
+            this.cursor = 0;
+            lex.start = this.cursor;
             lex.ty = .indent;
-            while(self.at() == ' ') self.cursor += 1;
-            lex.end = self.cursor;
+            while(this.at() == ' ') this.cursor += 1;
+            lex.end = this.cursor;
+            this.prev_indent = lex.end;
+
+            this.pending_newline = 0;
+
             return lex;
         }
 
-        if(self.at() == 0) return lex;
-
-        while(true):(self.nextc())
+        // eof
+        if(this.at() == 0)
         {
-            const c = self.at();
+            lex.end = this.cursor;
+            return lex;
+        }
+
+        if(this.pending_newline != npos)
+        {
+            lex.ty = .newline;
+            lex.start = this.pending_newline;
+            lex.end = this.cursor;
+            this.pending_newline = npos;
+            return lex;
+        }
+
+        while(true):(this.nextc())
+        {
+            const c = this.at();
             switch(state)
             {
                 .start => switch(c) {
                     0 => break,
                     ' ', '\t', => {
-                        lex.start = self.cursor + 1;
+                        lex.start = this.cursor + 1;
                     },
                     '\r' => {
-                        lex.start = self.cursor + 1;
+                        lex.start = this.cursor + 1;
                         state = .carriage_return;
                     },
                     '\n' => {
-                        lex.start = self.cursor + 1;
+                        lex.start = this.cursor + 1;
                         state = .newline;
                     },
                     '+' => state = .plus,
@@ -200,24 +175,29 @@ pub const lexer = extern struct
 
                     '(' => {
                         lex.ty = .lparen;
-                        self.nextc();
+                        this.nextc();
                         break;
                     },
                     ')' => {
                         lex.ty = .rparen;
-                        self.nextc();
+                        this.nextc();
+                        break;
+                    },
+                    ';' => {
+                        lex.ty = .semicolon;
+                        this.nextc();
                         break;
                     },
                     else => {
                         lex.ty = .invalid;
-                        self.nextc();
-                        lex.end = self.cursor;
+                        this.nextc();
+                        lex.end = this.cursor;
                         return lex;
                     },
                 },
                 .carriage_return => switch(c) {
                     '\n' => {
-                        lex.start = self.cursor + 1;
+                        lex.start = this.cursor + 1;
                         state = .newline;
                     },
                     else => { lex.ty = .invalid; break; }
@@ -225,19 +205,42 @@ pub const lexer = extern struct
                 .newline => switch(c) {
                     ' ' => {},
                     else => {
-                        lex.ty = .indent;
-                        break;
+                        const new_indent = this.cursor - lex.start;
+                        if(new_indent == 0 and (c == '\n' or c == '\r' or c == 0))
+                        {
+                            // empty lines are not unindents
+                            lex.ty = .newline;
+                            break;
+                        }
+                        else if(new_indent > this.prev_indent)
+                        {
+                            lex.ty = .indent;
+                            this.prev_indent = new_indent;
+                            break;
+                        }
+                        else if(new_indent == this.prev_indent)
+                        {
+                            lex.ty = .newline;
+                            break;
+                        }
+                        else if(new_indent < this.prev_indent)
+                        {
+                            lex.ty = .unindent;
+                            this.prev_indent = new_indent;
+                            this.pending_newline = lex.start;
+                            break;
+                        }
                     }
                 },
                 .plus => switch(c) {
                     '+' => {
                         lex.ty = .plus_plus;
-                        self.nextc();
+                        this.nextc();
                         break;
                     },
                     '=' =>  {
                         lex.ty = .plus_equal;
-                        self.nextc();
+                        this.nextc();
                         break;
                     },
                     else => { lex.ty = .plus; break; },
@@ -245,7 +248,7 @@ pub const lexer = extern struct
                 .minus => switch(c) {
                     '=' => {
                         lex.ty = .minus_equal;
-                        self.nextc();
+                        this.nextc();
                         break;
                     },
                     else => { lex.ty = .minus; break; },
@@ -253,7 +256,7 @@ pub const lexer = extern struct
                 .star => switch(c) {
                     '=' => {
                         lex.ty = .star_equal;
-                        self.nextc();
+                        this.nextc();
                         break;
                     },
                     else => { lex.ty = .star; break; },
@@ -261,7 +264,7 @@ pub const lexer = extern struct
                 .slash => switch(c) {
                     '=' => {
                         lex.ty = .slash_equal;
-                        self.nextc();
+                        this.nextc();
                         break;
                     },
                     else => { lex.ty = .slash; break; },
@@ -270,7 +273,7 @@ pub const lexer = extern struct
                     '=' =>
                     {
                         lex.ty = .equal_equal;
-                        self.nextc();
+                        this.nextc();
                         break;
                     },
                     else => {
@@ -305,7 +308,7 @@ pub const lexer = extern struct
                 .identifier => switch(c) {
                     'a'...'z', 'A'...'Z', '0'...'9', '_' => {},
                     else => {
-                        if(lexeme.get_keyword(self.source[lex.start..self.cursor])) |keyword|
+                        if(Lexeme.get_keyword(this.source[lex.start..this.cursor])) |keyword|
                         { lex.ty = keyword; }
                         break;
                     }
@@ -313,47 +316,76 @@ pub const lexer = extern struct
             }
         }
 
-        lex.end = self.cursor;
+        lex.end = this.cursor;
         return lex;
     }
 
 
     // ********************************************************************************
-    fn at(self: lexer) u8
-    { return self.source[self.cursor]; }
+    fn at(this: Lexer) u8
+    { return this.source[this.cursor]; }
 
 
     // ********************************************************************************
-    fn peek(self: lexer) u8
-    { assert(self.at() != 0); return self.source[self.cursor + 1]; }
+    fn peek(this: Lexer) u8
+    { assert(this.at() != 0); return this.source[this.cursor + 1]; }
 
     // ********************************************************************************
-    fn nextc(self: *lexer) void
-    { self.cursor += 1; }
+    fn nextc(this: *Lexer) void
+    { this.cursor += 1; }
 };
 
 test "lexer"
 {
-    var lxr = lexer.init("(5+5)*2.0");
+    var lxr = Lexer.init("(5+5)*2.0");
     // first lexeme is always indent
-    try std.testing.expectEqual(lex_type.indent, lxr.next().ty);
-    try std.testing.expectEqual(lex_type.lparen, lxr.next().ty);
-    try std.testing.expectEqual(lex_type.literal_int, lxr.next().ty);
-    try std.testing.expectEqual(lex_type.plus, lxr.next().ty);
-    try std.testing.expectEqual(lex_type.literal_int, lxr.next().ty);
-    try std.testing.expectEqual(lex_type.rparen, lxr.next().ty);
-    try std.testing.expectEqual(lex_type.star, lxr.next().ty);
-    try std.testing.expectEqual(lex_type.literal_float, lxr.next().ty);
+    try std.testing.expectEqual(Terminal.indent,         lxr.next().ty);
+    try std.testing.expectEqual(Terminal.lparen,         lxr.next().ty);
+    try std.testing.expectEqual(Terminal.literal_int,    lxr.next().ty);
+    try std.testing.expectEqual(Terminal.plus,           lxr.next().ty);
+    try std.testing.expectEqual(Terminal.literal_int,    lxr.next().ty);
+    try std.testing.expectEqual(Terminal.rparen,         lxr.next().ty);
+    try std.testing.expectEqual(Terminal.star,           lxr.next().ty);
+    try std.testing.expectEqual(Terminal.literal_float,  lxr.next().ty);
 
-    lxr = lexer.init("func fn() bool\n    return false");
+    lxr = Lexer.init("func fn() bool\n    var n = true\n    return false\nconst pi = 3.14");
     // first lexeme is always indent
-    try std.testing.expectEqual(lex_type.indent, lxr.next().ty);
-    try std.testing.expectEqual(lex_type.ky_func, lxr.next().ty);
-    try std.testing.expectEqual(lex_type.identifier, lxr.next().ty);
-    try std.testing.expectEqual(lex_type.lparen, lxr.next().ty);
-    try std.testing.expectEqual(lex_type.rparen, lxr.next().ty);
-    try std.testing.expectEqual(lex_type.identifier, lxr.next().ty);
-    try std.testing.expectEqual(lex_type.indent, lxr.next().ty);
-    try std.testing.expectEqual(lex_type.ky_return, lxr.next().ty);
-    try std.testing.expectEqual(lex_type.identifier, lxr.next().ty);
+    try std.testing.expectEqual(Terminal.indent,      lxr.next().ty);
+    try std.testing.expectEqual(Terminal.ky_func,     lxr.next().ty);
+    try std.testing.expectEqual(Terminal.identifier,  lxr.next().ty);
+    try std.testing.expectEqual(Terminal.lparen,      lxr.next().ty);
+    try std.testing.expectEqual(Terminal.rparen,      lxr.next().ty);
+    try std.testing.expectEqual(Terminal.identifier,  lxr.next().ty);
+    try std.testing.expectEqual(Terminal.indent,      lxr.next().ty);
+    try std.testing.expectEqual(Terminal.ky_var,      lxr.next().ty);
+    try std.testing.expectEqual(Terminal.identifier,  lxr.next().ty);
+    try std.testing.expectEqual(Terminal.equal,       lxr.next().ty);
+    try std.testing.expectEqual(Terminal.identifier,  lxr.next().ty);
+    try std.testing.expectEqual(Terminal.newline,     lxr.next().ty);
+    try std.testing.expectEqual(Terminal.ky_return,   lxr.next().ty);
+    try std.testing.expectEqual(Terminal.identifier,  lxr.next().ty);
+    try std.testing.expectEqual(Terminal.unindent,    lxr.next().ty);
+    try std.testing.expectEqual(Terminal.newline,     lxr.next().ty);
+    try std.testing.expectEqual(Terminal.ky_const,    lxr.next().ty);
+    try std.testing.expectEqual(Terminal.identifier,  lxr.next().ty);
+    try std.testing.expectEqual(Terminal.equal,       lxr.next().ty);
+    try std.testing.expectEqual(Terminal.literal_float,lxr.next().ty);
+    try std.testing.expectEqual(Terminal.eof,         lxr.next().ty);
+
+    lxr = Lexer.init("10'000");
+    // first lexeme is always indent
+    try std.testing.expectEqual(Terminal.indent,      lxr.next().ty);
+    try std.testing.expectEqual(Terminal.literal_int, lxr.next().ty);
+    try std.testing.expectEqual(Terminal.eof,         lxr.next().ty);
+
+    lxr = Lexer.init("1'0'0'0'0.50");
+    // first lexeme is always indent
+    try std.testing.expectEqual(Terminal.indent,        lxr.next().ty);
+    try std.testing.expectEqual(Terminal.literal_float, lxr.next().ty);
+    try std.testing.expectEqual(Terminal.eof,           lxr.next().ty);
+    try std.testing.expectEqual(Terminal.eof,           lxr.next().ty);
+    try std.testing.expectEqual(Terminal.eof,           lxr.next().ty);
+    try std.testing.expectEqual(Terminal.eof,           lxr.next().ty);
+    try std.testing.expectEqual(Terminal.eof,           lxr.next().ty);
+    try std.testing.expectEqual(Terminal.eof,           lxr.next().ty);
 }

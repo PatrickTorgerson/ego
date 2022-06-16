@@ -8,27 +8,26 @@
 const std = @import("std");
 const ego = @import("ego");
 
-
-// helpers for encoding rk arguments
-fn r(value: ego.instruction.basetype) ego.instruction.basetype
-{ return value << 1; }
-fn k(value: ego.instruction.basetype) ego.instruction.basetype
-{ return r(value) | 1; }
-
-const src =
-\\func square(n &int) int
-\\    var result = n * n
-\\    return result
+const parsetest =
+    \\
+    \\  1*1 - 1*1
+    \\
 ;
-
 
 pub fn main() !void
 {
-    var lexer = ego.lexer.init(src);
+    var lexer = ego.Lexer.init(parsetest);
+    var lexeme = lexer.next();
 
-    var next = lexer.next();
-    while(next.ty != .eof):(next = lexer.next())
+    while(lexeme.ty != .eof):(lexeme = lexer.next())
     {
-        std.debug.print("{s: >20} : '{s}'\n", .{@tagName(next.ty), lexer.string(next)});
+        std.debug.print("{s:20} : '{s}'\n", .{@tagName(lexeme.ty), lexer.string(lexeme)});
     }
+
+    std.debug.print("\n============================================\n\n", .{});
+
+    var ast = try ego.parse.parse(std.testing.allocator, parsetest);
+    defer ast.deinit(std.testing.allocator);
+
+    std.debug.print("nodes : {}\n", .{ast.nodes.len});
 }
