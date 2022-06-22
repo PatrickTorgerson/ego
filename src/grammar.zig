@@ -7,67 +7,115 @@
 
 // ********************************************************************************
 /// non-terminal symbols in the ego grammar
-pub const Symbol = enum(u32)
+pub const Symbol = enum(i32)
 {
-    file = @enumToInt(Terminal.invalid) + 1,
+    file,
     endfile,
     top_decl_line,
     top_decl_line_cont,
     top_decl,
     top_decl_cont,
-    declaration,
+    var_decl,
 
-    newlines, first_opaque,
     optional_semicolon,
 
     expression, expr_cont,
-    unary, binary, call,
-    neg, boolnot, bitnot,
-    add, sub, mul, div,
+    unary, call,
     close_paren,
 
-    // non-exhastive to support terminals
-    _,
+    var_seq,
+    var_seq_optional_type,
+    expr_list,
+    expr_list_cont,
 
-    /// Return terminal or null
-    pub fn terminal(this: Symbol) ?Terminal
+    type_expr,
+    optional_type_expr,
+    full_type_expr,
+
+    expect_equal,
+
+    identifier,
+
+    create_binop_node,
+    create_var_decl_node,
+    create_var_seq_node,
+
+    // literals
+    literal_int,
+    literal_float,
+    literal_hex,
+    literal_octal,
+    literal_binary,
+    literal_true,
+    literal_false,
+    literal_nil,
+    literal_string,
+
+    // binops
+    add,
+    sub,
+    mul,
+    div,
+    mod,
+    concat,
+    arrmul,
+    equals,
+    not_equals,
+    less_than,
+    lesser_or_equal,
+    greater_tha,
+    greater_or_equal,
+    type_and,
+    type_or,
+    bool_and,
+    bool_or,
+
+    pub fn init_literal(l: Terminal) ?Symbol
     {
-        const i = @enumToInt(this);
-        if(i <= @enumToInt(Terminal.invalid))
-        { return @intToEnum(Terminal, i); }
-        else return null;
+        const diff = @enumToInt(Symbol.literal_int) - @enumToInt(Terminal.literal_int);
+        const i = @enumToInt(l);
+        if(i >= @enumToInt(Terminal.literal_int) and i <= @enumToInt(Terminal.literal_string))
+        {
+            return @intToEnum(Symbol, i + diff);
+        } else return null;
     }
 
-    pub fn init(t: Terminal) Symbol
+    pub fn init_binop(l: Terminal) ?Symbol
     {
-        return @intToEnum(Symbol, @enumToInt(t));
-    }
-
-    pub fn name(this: Symbol) [:0]const u8
-    {
-        if(this.terminal()) |t|
-            return @tagName(t)
-        else
-            return @tagName(this);
+        const diff = @enumToInt(Symbol.add) - @enumToInt(Terminal.plus);
+        const i = @enumToInt(l);
+        if(i >= @enumToInt(Terminal.plus) and i <= @enumToInt(Terminal.ky_or))
+        {
+            return @intToEnum(Symbol, i + diff);
+        } else return null;
     }
 };
 
 // ********************************************************************************
 /// terminal symbols in the ego grammar
-pub const Terminal = enum(u32)
+pub const Terminal = enum(i32)
 {
-    plus, minus, star, slash, percent,
-
+    // binops
+    plus,
+    minus,
+    star,
+    slash,
+    percent,
     plus_plus,
-    plus_equal, minus_equal, star_equal, slash_equal,
+    star_star,
+    equal_equal,
+    bang_equal,
+    lesser,
+    lesser_equal,
+    greater,
+    greater_equal,
+    ampersand_ampersand,
+    pipe_pipe,
+    ky_and,
+    ky_or,
 
-    bang, tilde, pipe, ampersand, carrot,
-
-    equal, equal_equal, bang_equal,
-    lesser, lesser_equal,
-    greater, greater_equal,
-
-    pipe_pipe, ampersand_ampersand,
+    bang, tilde,
+    equal, plus_equal, minus_equal, star_equal, slash_equal,
 
     identifier,
 
@@ -94,11 +142,8 @@ pub const Terminal = enum(u32)
     ky_error,
     ky_catch,
     ky_try,
-    ky_and,
-    ky_or,
 
     ky_any,
-    ky_numeric,
     ky_bool,
     ky_int,
     ky_float,
@@ -120,8 +165,7 @@ pub const Terminal = enum(u32)
     lbrace, rbrace,
     lbracket, rbracket,
     semicolon, colon, colon_colon,
-    single_quote, double_quote,
-    comma,
+    comma, question_mark, ampersand,
 
     indent, unindent, newline,
 

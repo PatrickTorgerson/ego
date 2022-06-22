@@ -42,7 +42,10 @@ pub const Lexeme = extern struct
         .{ "catch", .ky_catch},
         .{ "try", .ky_try},
         .{ "and", .ky_and},
-        .{ "or", .ky_or},
+
+        .{ "true", .literal_true},
+        .{ "false", .literal_false},
+        .{ "nil", .literal_nil},
     });
 
     // ********************************************************************************
@@ -53,9 +56,9 @@ pub const Lexeme = extern struct
 
 
 // ********************************************************************************
-pub const Lexer = extern struct
+pub const Lexer = struct
 {
-    source: [*:0]const u8,
+    source: [:0]const u8,
     cursor: usize,
     prev_indent: usize,
     pending_newline: usize,
@@ -66,7 +69,7 @@ pub const Lexer = extern struct
     {
         start,
         plus, minus, star, slash,
-        equal,
+        equal, bang, lesser, greater,
         zero, number, number_noquote, fractional,
         identifier,
 
@@ -83,7 +86,7 @@ pub const Lexer = extern struct
         while(source[start] == '\n' or source[start] == '\r') start += 1;
 
         return Lexer {
-            .source = source[start..].ptr,
+            .source = source[start..],
             .cursor = npos,
             .prev_indent = 0,
             .pending_newline = npos,
@@ -163,6 +166,9 @@ pub const Lexer = extern struct
                     '*' => state = .star,
                     '/' => state = .slash,
                     '=' => state = .equal,
+                    '!' => state = .bang,
+                    '<' => state = .lesser,
+                    '>' => state = .greater,
                     '0' => state = .zero,
                     '1'...'9' => {
                         lex.ty = .literal_int;
@@ -185,6 +191,41 @@ pub const Lexer = extern struct
                     },
                     ';' => {
                         lex.ty = .semicolon;
+                        this.nextc();
+                        break;
+                    },
+                    '%' => {
+                        lex.ty = .percent;
+                        this.nextc();
+                        break;
+                    },
+                    '~' => {
+                        lex.ty = .tilde;
+                        this.nextc();
+                        break;
+                    },
+                    '[' => {
+                        lex.ty = .lbracket;
+                        this.nextc();
+                        break;
+                    },
+                    ']' => {
+                        lex.ty = .rbracket;
+                        this.nextc();
+                        break;
+                    },
+                    '{' => {
+                        lex.ty = .lbrace;
+                        this.nextc();
+                        break;
+                    },
+                    '}' => {
+                        lex.ty = .rbrace;
+                        this.nextc();
+                        break;
+                    },
+                    ',' => {
+                        lex.ty = .comma;
                         this.nextc();
                         break;
                     },
@@ -254,6 +295,11 @@ pub const Lexer = extern struct
                     else => { lex.ty = .minus; break; },
                 },
                 .star => switch(c) {
+                    '*' => {
+                        lex.ty = .star_star;
+                        this.nextc();
+                        break;
+                    },
                     '=' => {
                         lex.ty = .star_equal;
                         this.nextc();
@@ -278,6 +324,39 @@ pub const Lexer = extern struct
                     },
                     else => {
                         lex.ty = .equal;
+                        break;
+                    },
+                },
+                .bang => switch(c) {
+                    '=' => {
+                        lex.ty = .bang_equal;
+                        this.nextc();
+                        break;
+                    },
+                    else => {
+                        lex.ty = .bang;
+                        break;
+                    },
+                },
+                .lesser => switch(c) {
+                    '=' => {
+                        lex.ty = .lesser_equal;
+                        this.nextc();
+                        break;
+                    },
+                    else => {
+                        lex.ty = .lesser;
+                        break;
+                    },
+                },
+                .greater => switch(c) {
+                    '=' => {
+                        lex.ty = .greater_equal;
+                        this.nextc();
+                        break;
+                    },
+                    else => {
+                        lex.ty = .greater;
                         break;
                     },
                 },

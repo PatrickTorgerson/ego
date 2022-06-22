@@ -12,6 +12,8 @@ pub const Vm = @import("vm.zig").Vm;
 pub const Lexer = @import("lex.zig").Lexer;
 pub const parse = @import("parse.zig");
 
+pub const dump = @import("ast-dump.zig");
+
 test "ego"
 {
     std.testing.refAllDecls(@This());

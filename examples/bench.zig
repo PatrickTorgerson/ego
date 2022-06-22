@@ -8,9 +8,11 @@
 const std = @import("std");
 const ego = @import("ego");
 
+const dump = ego.dump.dump;
+
 const parsetest =
     \\
-    \\  1*1 - 1*1
+    \\  var a,b,c int = 12/3/3/3/3/3+1, 2*(1+2), 3+1
     \\
 ;
 
@@ -30,4 +32,19 @@ pub fn main() !void
     defer ast.deinit(std.testing.allocator);
 
     std.debug.print("nodes : {}\n", .{ast.nodes.len});
+
+    std.debug.print("\n============================================\n\n", .{});
+
+    if(ast.diagnostics.len >= 0)
+    {
+        for(ast.diagnostics) |d|
+        {
+            std.debug.print("{s}",.{@tagName(d.tag)});
+            if(d.tag == .expected_lexeme)
+            { std.debug.print(": {s}", .{@tagName(d.expected.?)}); }
+            std.debug.print(" at '{s}'\n",.{ast.lexeme_str_lexi(d.lexeme)});
+        }
+    }
+
+    try dump(ast);
 }
