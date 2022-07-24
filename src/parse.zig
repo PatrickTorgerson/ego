@@ -16,6 +16,7 @@ const Symbol = @import("grammar.zig").Symbol;
 const Ast = @import("ast.zig").Ast;
 
 //std.enums.directEnumArrayDefault
+/// maps operator terminals to precedence level
 const precedence: std.EnumMap(Terminal, usize) = init: {
     var prec_map: std.EnumMap(Terminal, usize) = .{};
 
@@ -40,13 +41,14 @@ const precedence: std.EnumMap(Terminal, usize) = init: {
     prec_map.put(.star_star, 4);
     prec_map.put(.percent, 4);
 
-
     break :init prec_map;
 };
 
-// ********************************************************************************
+/// Generate an AST from ego source
 pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast
 {
+    // -- lexing
+
     var lexemes = std.MultiArrayList(Lexeme){};
 
     try lexemes.ensureTotalCapacity(gpa, source.len / 8);
@@ -61,6 +63,8 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast
     }
     try lexemes.append(gpa, lexeme); // eof
 
+    // -- parsing
+
     var state = ParseState {
         .gpa = gpa,
         .lexeme_ty = lexemes.items(.ty),
@@ -71,50 +75,42 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast
         .symbol_stack = try std.ArrayList(Symbol).initCapacity(gpa, 512),
         .nodes = .{},
         .data = .{},
-        .node_stack = .{},
+        .work_stack = .{},
         .diagnostics = .{},
     };
     defer state.indent_stack.deinit();
     defer state.symbol_stack.deinit();
-
     defer state.data.deinit(gpa);
-    defer state.node_stack.deinit(gpa);
+    defer state.work_stack.deinit(gpa);
     defer state.diagnostics.deinit(gpa);
 
     state.initial_indent();
-    state.symbol_stack.appendAssumeCapacity(.file);
+    state.symbol_stack.appendAssumeCapacity(.eof);
+    state.symbol_stack.appendAssumeCapacity(.top_decl_line_cont);
+
+    // root node
+    _ = try state.create_node(.{
+        .symbol = .file,
+        .lexeme = 0,
+        .l = 0, .r = 0, // updated after parsing
+    });
 
     // current operator precedence
-    var prec : usize = 0;
+    var prec: usize = 0;
 
-    // nodes on state.node_stack belonging to current symbol
+    // nodes on state.work_stack belonging to current symbol
     // (var_seq, expr_list, ...)
-    var node_count : usize = 0;
+    var node_count: usize = 0;
 
     // main parsing loop
     loop: while(true)
     {
-        std.debug.print("::{s}:: \n", .{@tagName(state.top_symbol())});
-        switch(state.symbol_stack.pop())
+        const symbol = state.pop_symbol();
+        std.debug.print("== {s: ^25} ==\n", .{@tagName(symbol)});
+
+        switch(symbol)
         {
-            .file => {
-                try state.symbol_stack.appendSlice(
-                    &[_]Symbol{.endfile, .top_decl_line_cont}
-                );
-                const n = try state.create_node(.{
-                    .symbol = .file,
-                    .lexeme = 0,
-                    .l = 0,
-                    .r = 0,
-                });
-                assert(n == 0);
-            },
-            .endfile =>{
-                state.nodes.items(.l)[0] = state.data.items.len;
-                try state.data.appendSlice(gpa, state.node_stack.items[0..]);
-                state.nodes.items(.r)[0] = state.data.items.len;
-                break :loop;
-            },
+            // => [top_decl_line, top_decl_line_cont]
             .top_decl_line_cont => {
                 // advance past redundant newlines
                 while(state.check_next(.newline)) state.advance();
@@ -124,7 +120,10 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast
                     try state.symbol_stack.append(.top_decl_line_cont);
                     try state.symbol_stack.append(.top_decl_line);
                 }
+                else state.advance();
             },
+
+            // => NEWLINE, top_level_decl, top_decl_cont, optional_semicolon
             .top_decl_line => {
                 if(state.consume(.newline)) |_|
                 {
@@ -134,6 +133,8 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast
                 }
                 else try state.diag_expected(.newline);
             },
+
+            // => [top_level_decl, top_decl_cont]
             .top_decl_cont => {
                 if(state.check(.semicolon) and !state.check_next(.newline))
                 {
@@ -142,9 +143,13 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast
                     try state.symbol_stack.append(.top_decl);
                 }
             },
+
+            // => [SEMICOLON]
             .optional_semicolon => {
                 _ = state.consume(.semicolon);
             },
+
+            // => [KY_PUB], var_decl
             .top_decl => {
                 if(state.check(.semicolon)) {
                     // empty decl
@@ -164,10 +169,10 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast
                 }
             },
 
-            // KY_VAR, var_seq, EQUAL, expr_list   |
-            // KY_CONST, var_seq, EQUAL, expr_list ;
+            // => KY_VAR, var_seq, EQUAL, expr_list
+            // => KY_CONST, var_seq, EQUAL, expr_list
             .var_decl => {
-                try state.push_node(state.lexi); // lexeme
+                try state.push(state.lexi); // lexeme
 
                 // skip var or const
                 _ = state.consume(.ky_var) orelse state.consume(.ky_const).?;
@@ -180,10 +185,10 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast
 
             },
 
-            // IDENTIFIER, {COMMA, IDENTIFIER}, optional_type_expr;
+            // => IDENTIFIER, {COMMA, IDENTIFIER}, optional_type_expr
             .var_seq => {
                 if(state.check(.identifier)) {
-                    try state.push_node(state.lexi);
+                    try state.push(state.lexi);
                     node_count += 1;
                     state.advance();
                     if(state.consume(.comma)) |_|
@@ -194,7 +199,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast
                 else try state.diag_expected(.identifier);
             },
 
-            // [expression, expr_list_cont];
+            // => [expression, expr_list_cont]
             .expr_list => {
                 switch(state.lexeme())
                 {
@@ -212,7 +217,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast
                 }
             },
 
-            // [COMMA, expression, expr_list_cont]
+            // => [COMMA, expression, expr_list_cont]
             .expr_list_cont => {
                 if(state.consume(.comma)) |_|
                 {
@@ -222,33 +227,35 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast
                 }
             },
 
-            // [type_expr]
+            // => [type_expr]
             .optional_type_expr => switch(state.lexeme()) {
                 .question_mark,
                 .ampersand,
                 .lbracket,
                 .identifier,
                 => try state.symbol_stack.append(.type_expr),
-                else => { try state.push_node(0); },
+                else => { try state.push(0); },
             },
 
-            // IDENTIFIER, {COLON_COLON, IDENTIFIER}   |
-            // QUESTION_MARK, type_expr                |
-            // AMPERSAND, type_expr                    |
-            // LBRACKET, RBRACKET, type_expr           |
-            // LBRACKET, LITERAL_INT, RBRACKET, type_expr;
+            // => IDENTIFIER, {COLON_COLON, IDENTIFIER}
+            // => QUESTION_MARK, type_expr
+            // => AMPERSAND, type_expr
+            // => LBRACKET, RBRACKET, type_expr
+            // => LBRACKET, LITERAL_INT, RBRACKET, type_expr
             .type_expr => {
                 if(state.consume(.identifier)) |_| {
-                    const n = try state.create_node(.{
+                    try state.push_node(.{
                         .symbol = .identifier,
                         .lexeme = state.lexi - 1,
                         .l = 0,
                         .r = 0,
                     });
-                    try state.push_node(n);
                 }
             },
 
+            // => unary, expr_cont
+            // => LITERAL, expr_cont
+            // => LPAREN, expression, close_paren, expr_cont
             .expression => {
                 try state.symbol_stack.append(.expr_cont);
                 switch(state.lexeme())
@@ -260,13 +267,12 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast
                     .literal_octal, .literal_binary, .literal_false,
                     .literal_true, .literal_nil, .literal_string
                     => {
-                        try state.node_stack.append(gpa,
-                            try state.create_node(.{
-                                .symbol = Symbol.init_literal(state.lexeme()).?,
-                                .lexeme = state.lexi,
-                                .l = 0,
-                                .r = 0,
-                        }));
+                        try state.push_node(.{
+                            .symbol = Symbol.init_literal(state.lexeme()).?,
+                            .lexeme = state.lexi,
+                            .l = 0,
+                            .r = 0,
+                        });
                         state.advance();
                     },
 
@@ -274,7 +280,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast
                         state.advance();
 
                         // store precedence to recover later
-                        try state.push_node(prec);
+                        try state.push(prec);
                         prec = 0;
 
                         try state.symbol_stack.append(.close_paren);
@@ -282,12 +288,13 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast
                     },
 
                     else => {
-                        state.pop_symbol(); // expr_cont
+                        _ = state.pop_symbol(); // expr_cont
                         try state.diag(.expected_expression);
                     },
                 }
             },
 
+            // => [BINOP, expression]
             .expr_cont => switch(state.lexeme())
             {
                 .plus,
@@ -308,8 +315,8 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast
                 .ky_and,
                 .ky_or => {
                     if(prec < precedence.get(state.lexeme()).?) {
-                        try state.push_node(state.lexi); // lexeme
-                        try state.push_node(prec);       // prev prec
+                        try state.push(state.lexi); // lexeme
+                        try state.push(prec);       // prev prec
                         prec = precedence.get(state.lexeme()).?;
 
                         state.advance();
@@ -321,18 +328,21 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast
                 }, else => {},
             },
 
+            // => RPAREN
             .close_paren =>
             {
                 if(state.consume(.rparen)) |_|
                 {
-                    prec = state.top_node(1).*; // restore precedence of enclosing expression
+                    prec = state.at(1); // restore precedence of enclosing expression
 
                     // move result node pop precedence
-                    state.top_node(1).* = state.top_node(0).*;
-                    state.pop_nodes(1);
+                    state.set(1, state.at(0));
+                    _ = state.pop();
                 }
                 else try state.diag_expected(.rparen);
             },
+
+            // => TODO
             .unary => {
                 // switch(state.lexeme())
                 // {
@@ -345,7 +355,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast
                 // }
             },
 
-            // EQUAL
+            // => EQUAL
             .expect_equal => {
                 if(state.consume(.equal)) |_| {}
                 else try state.diag_expected(.equal);
@@ -355,45 +365,45 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast
 
             // -> rhs, prec, lexeme, lhs, ...
             .create_binop_node => {
-                const sym = Symbol.init_binop(state.lexeme_ty[state.top_node(2).*]).?;
+                const sym = Symbol.init_binop(state.lexeme_ty[state.at(2)]).?;
                 std.debug.print("  - {s} {s} {s}\n", .{
                     @tagName(sym),
-                    @tagName(state.nodes.items(.symbol)[ state.top_node(3).* ]),
-                    @tagName(state.nodes.items(.symbol)[ state.top_node(0).* ]),
+                    @tagName(state.nodes.items(.symbol)[ state.at(3) ]),
+                    @tagName(state.nodes.items(.symbol)[ state.at(0) ]),
                 });
 
                 const node = try state.create_node(.{
                     .symbol = sym,
-                    .lexeme = state.top_node(2).*,
-                    .l = state.top_node(3).*,
-                    .r = state.top_node(0).*,
+                    .lexeme = state.at(2),
+                    .l = state.at(3),
+                    .r = state.at(0),
                 });
 
-                prec = state.top_node(1).*;
+                prec = state.at(1);
 
-                state.pop_nodes(4);
-                try state.push_node(node);
+                state.pop_slice(4);
+                try state.push(node);
             },
 
             // -> type_expr, identifier_lexeme..., ...
             .create_var_seq_node => {
-                const type_expr = state.top_node(0).*;
-                state.pop_nodes(1);
+                const type_expr = state.at(0);
+                _ = state.pop();
 
                 assert(node_count > 0);
 
                 const node = try state.create_node(.{
                     .symbol = .var_seq,
-                    .lexeme = state.top_node(node_count - 1).*,
+                    .lexeme = state.at(node_count - 1),
                     .l = state.data.items.len,
                     .r = type_expr,
                 });
 
                 try state.data.append(gpa, node_count);
-                try state.data.appendSlice(gpa, state.top_node_slice(node_count));
+                try state.data.appendSlice(gpa, state.top_slice(node_count));
 
-                state.pop_nodes(node_count);
-                try state.push_node(node);
+                state.pop_slice(node_count);
+                try state.push(node);
 
                 node_count = 0;
             },
@@ -405,26 +415,37 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast
                 else {
                     const rhs = state.data.items.len;
                     try state.data.append(gpa, node_count);
-                    try state.data.appendSlice(gpa, state.top_node_slice(node_count));
-                    state.pop_nodes(node_count);
+                    try state.data.appendSlice(gpa, state.top_slice(node_count));
+                    state.pop_slice(node_count);
 
                     const node = try state.create_node(.{
                         .symbol = .var_decl,
-                        .lexeme = state.top_node(1).*,
-                        .l = state.top_node(0).*,
+                        .lexeme = state.at(1),
+                        .l = state.at(0),
                         .r = rhs,
                     });
 
-                    state.pop_nodes(2);
-                    try state.push_node(node);
+                    state.pop_slice(2);
+                    try state.push(node);
 
                     node_count = 0;
                 }
             },
 
+            .eof =>{
+                if(state.lexeme() != .eof)
+                    try state.diag_expected(.eof);
+                break :loop;
+            },
+
             else => unreachable,
         }
     }
+
+    // update root node with top level decls
+    state.nodes.items(.l)[0] = state.data.items.len;
+    try state.data.appendSlice(gpa, state.work_stack.items[0..]);
+    state.nodes.items(.r)[0] = state.data.items.len;
 
     return Ast
     {
@@ -437,11 +458,12 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast
 }
 
 
-// ********************************************************************************
-pub const ParseState = struct
+/// active parsing state and helpre funcs
+const ParseState = struct
 {
     gpa: std.mem.Allocator,
 
+    // SOA lexeme data
     lexeme_ty: []const Terminal,
     lexeme_starts: []const usize,
     lexeme_ends: []const usize,
@@ -451,12 +473,16 @@ pub const ParseState = struct
     symbol_stack: std.ArrayList(Symbol),
 
     nodes: std.MultiArrayList(Ast.Node),
+
+    // node indecies describing tree structure
     data: std.ArrayListUnmanaged(Ast.Node.Index),
-    node_stack: std.ArrayListUnmanaged(Ast.Node.Index),
+
+    // temporary workspace for building nodes
+    work_stack: std.ArrayListUnmanaged(usize),
 
     diagnostics: std.ArrayListUnmanaged(Ast.Diagnostic),
 
-    // ********************************************************************************
+    /// precesses sources initial indent
     pub fn initial_indent(this: *ParseState) void
     {
         assert(this.indent_stack.items.len == 0);
@@ -467,27 +493,28 @@ pub const ParseState = struct
         this.advance();
     }
 
-    // ********************************************************************************
+    /// returns current lexeme type
     pub fn lexeme(this: ParseState) Terminal
     { return this.lexeme_ty[this.lexi]; }
 
-    // ********************************************************************************
+    /// returns next lexeme's type
     pub fn peek(this: ParseState) Terminal
     { return this.lexeme_ty[this.lexi + 1]; }
 
-    // ********************************************************************************
+    /// advance to next lexeme
     pub fn advance(this: *ParseState) void
     { this.lexi += 1; }
 
-    // ********************************************************************************
+    /// verifies current lexeme is of type 'terminal'
     pub fn check(this: ParseState, terminal: Terminal) bool
     { return this.lexeme_ty[this.lexi] == terminal; }
 
-    // ********************************************************************************
+    /// verifies next lexeme is of type 'terminal'
     pub fn check_next(this: ParseState, terminal: Terminal) bool
     { return this.lexeme_ty[this.lexi + 1] == terminal; }
 
-    // ********************************************************************************
+    /// return teriminal if lexeme is of type 'terminal', else null
+    /// TODO: return index intead?
     pub fn consume(this: *ParseState, terminal: Terminal) ?Terminal
     {
         if(this.check(terminal))
@@ -499,68 +526,89 @@ pub const ParseState = struct
         else return null;
     }
 
-    // ********************************************************************************
-    pub fn top_symbol(this: ParseState) Symbol
-    { return this.symbol_stack.items[this.symbol_stack.items.len - 1]; }
+    /// pops symbol from symbol_stack
+    pub fn pop_symbol(this: *ParseState) Symbol
+    {
+        return this.symbol_stack.pop();
+    }
 
-    // ********************************************************************************
-    pub fn pop_symbol(this: *ParseState) void
-    { this.symbol_stack.items.len -= 1; }
-
-    // ********************************************************************************
+    /// pushes new node onto this.nodes, returns index
     pub fn create_node(this: *ParseState, node: Ast.Node) !Ast.Node.Index
     {
-        try this.nodes.append(this.*.gpa, node);
+        try this.nodes.append(this.gpa, node);
         return this.nodes.len - 1;
     }
 
-    // ********************************************************************************
-    pub fn top_node(this: *ParseState, n: usize) *Ast.Node.Index
+    /// returns work_stack[n], n from top
+    pub fn at(this: ParseState, n: usize) usize
     {
-        return &this.node_stack.items[this.node_stack.items.len - (n+1)];
+        return this.work_stack.items[this.work_stack.items.len - (n+1)];
     }
 
-    pub fn top_node_slice(this: *ParseState, n: usize) []Ast.Node.Index
+    /// sets work_stack[n] to v, n from top
+    pub fn set(this: *ParseState, n: usize, v: usize) void
     {
-        return this.node_stack.items[this.node_stack.items.len - n .. this.node_stack.items.len];
+        this.work_stack.items[this.work_stack.items.len - (n+1)] = v;
     }
 
-    // ********************************************************************************
-    pub fn pop_nodes(this: *ParseState, n: usize) void
+    /// returns slice of top n items from work_stack
+    pub fn top_slice(this: *ParseState, n: usize) []usize
     {
-        const amt = std.math.min(n, this.node_stack.items.len);
-        this.node_stack.items.len -= amt;
+        return this.work_stack.items[this.work_stack.items.len - n .. this.work_stack.items.len];
     }
 
-    // ********************************************************************************
-    pub fn push_node(this: *ParseState, n: usize) !void
+    /// pops from work_statck
+    pub fn pop(this: *ParseState) usize
     {
-        try this.node_stack.append(this.gpa, n);
+        return this.work_stack.pop();
     }
 
-    // ********************************************************************************
+    /// pops top n items from work_stack
+    pub fn pop_slice(this: *ParseState, n: usize) void
+    {
+        const amt = std.math.min(n, this.work_stack.items.len);
+        this.work_stack.items.len -= amt;
+    }
+
+    /// push n to work_stack
+    pub fn push(this: *ParseState, n: usize) !void
+    {
+        try this.work_stack.append(this.gpa, n);
+    }
+
+    // creates node, pushes index to work_stack
+    pub fn push_node(this: *ParseState, node: Ast.Node) !void
+    {
+        try this.push(try this.create_node(node));
+    }
+
+    /// log expected symbol diagnostic
     pub fn diag_expected(this: *ParseState, expected: Terminal) error{OutOfMemory}!void
     {
         @setCold(true);
         try this.diag_msg(.{ .tag = .expected_lexeme, .lexeme = this.lexi, .expected = expected });
     }
 
-    // ********************************************************************************
+    /// log diagnostic
     pub fn diag(this: *ParseState, tag: Ast.Diagnostic.Tag) error{OutOfMemory}!void
     {
         @setCold(true);
         try this.diag_msg(.{ .tag = tag, .lexeme = this.lexi, .expected = null });
     }
 
-    // ********************************************************************************
+    /// log diagnostic
     pub fn diag_msg(this: *ParseState, msg: Ast.Diagnostic) error{OutOfMemory}!void
     {
         @setCold(true);
         try this.diagnostics.append(this.gpa, msg);
         std.debug.print("  !!  {s}  !!\n", .{@tagName(msg.tag)});
     }
-    // ********************************************************************************
-    // ********************************************************************************
-    // ********************************************************************************
 
 };
+
+test "parse"
+{
+    // I just want the test-runner to see this file
+    const hello = null;
+    _ = hello;
+}

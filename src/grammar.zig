@@ -70,6 +70,8 @@ pub const Symbol = enum(i32)
     bool_and,
     bool_or,
 
+    eof,
+
     pub fn init_literal(l: Terminal) ?Symbol
     {
         const diff = @enumToInt(Symbol.literal_int) - @enumToInt(Terminal.literal_int);
