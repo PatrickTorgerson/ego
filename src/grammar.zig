@@ -4,11 +4,9 @@
 //! ego uses the MIT license, see LICENSE for more information
 // ********************************************************************************
 
-
 // ********************************************************************************
 /// non-terminal symbols in the ego grammar
-pub const Symbol = enum(i32)
-{
+pub const Symbol = enum(i32) {
     file,
     endfile,
     top_decl_line,
@@ -19,8 +17,10 @@ pub const Symbol = enum(i32)
 
     optional_semicolon,
 
-    expression, expr_cont,
-    unary, call,
+    expression,
+    expr_cont,
+    unary,
+    call,
     close_paren,
 
     var_seq,
@@ -72,22 +72,18 @@ pub const Symbol = enum(i32)
 
     eof,
 
-    pub fn init_literal(l: Terminal) ?Symbol
-    {
+    pub fn init_literal(l: Terminal) ?Symbol {
         const diff = @enumToInt(Symbol.literal_int) - @enumToInt(Terminal.literal_int);
         const i = @enumToInt(l);
-        if(i >= @enumToInt(Terminal.literal_int) and i <= @enumToInt(Terminal.literal_string))
-        {
+        if (i >= @enumToInt(Terminal.literal_int) and i <= @enumToInt(Terminal.literal_string)) {
             return @intToEnum(Symbol, i + diff);
         } else return null;
     }
 
-    pub fn init_binop(l: Terminal) ?Symbol
-    {
+    pub fn init_binop(l: Terminal) ?Symbol {
         const diff = @enumToInt(Symbol.add) - @enumToInt(Terminal.plus);
         const i = @enumToInt(l);
-        if(i >= @enumToInt(Terminal.plus) and i <= @enumToInt(Terminal.ky_or))
-        {
+        if (i >= @enumToInt(Terminal.plus) and i <= @enumToInt(Terminal.ky_or)) {
             return @intToEnum(Symbol, i + diff);
         } else return null;
     }
@@ -95,9 +91,7 @@ pub const Symbol = enum(i32)
 
 // ********************************************************************************
 /// terminal symbols in the ego grammar
-pub const Terminal = enum(i32)
-{
-    // binops
+pub const Terminal = enum(i32) {
     plus,
     minus,
     star,
@@ -116,8 +110,14 @@ pub const Terminal = enum(i32)
     ky_and,
     ky_or,
 
-    bang, tilde,
-    equal, plus_equal, minus_equal, star_equal, slash_equal,
+    bang,
+    tilde,
+
+    equal,
+    plus_equal,
+    minus_equal,
+    star_equal,
+    slash_equal,
 
     identifier,
 
@@ -163,13 +163,22 @@ pub const Terminal = enum(i32)
     literal_nil,
     literal_string,
 
-    lparen, rparen,
-    lbrace, rbrace,
-    lbracket, rbracket,
-    semicolon, colon, colon_colon,
-    comma, question_mark, ampersand,
+    lparen,
+    rparen,
+    lbrace,
+    rbrace,
+    lbracket,
+    rbracket,
+    semicolon,
+    colon,
+    colon_colon,
+    comma,
+    question_mark,
+    ampersand,
 
-    indent, unindent, newline,
+    indent,
+    unindent,
+    newline,
 
     eof,
     invalid,

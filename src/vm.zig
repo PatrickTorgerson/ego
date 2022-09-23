@@ -10,84 +10,82 @@ const assert = std.debug.assert;
 const Instruction = @import("instruction.zig").Instruction;
 const Value = @import("value.zig").Value;
 
-
 // ********************************************************************************
-pub const Vm = extern struct
-{
-    pub const Error = error { stack_overflow } || Value.Error;
+pub const Vm = extern struct {
+    pub const Error = error{stack_overflow} || Value.Error;
 
     stack: [256]u64 align(16) = undefined,
-    kst:   [256]u64 align(16) = undefined,
-
+    kst: [256]u64 align(16) = undefined,
 
     // ********************************************************************************
     /// Temporary helper for setting constants
-    pub fn setk(self: *Vm, comptime T: type, i: usize, v: T) void
-    {
+    pub fn setk(self: *Vm, comptime T: type, i: usize, v: T) void {
         comptime assert(std.meta.bitCount(T) == 64);
         ptr(T, &self.kst[i]).* = v;
     }
 
     // ********************************************************************************
-    pub fn execute(self: *Vm, program: []const Instruction) Error!void
-    {
+    pub fn execute(self: *Vm, program: []const Instruction) Error!void {
         var ip: [*c]const Instruction = program.ptr;
         const end: [*c]const Instruction = program.ptr + program.len;
 
         var storage = [2][]u64{ &self.stack, &self.kst };
 
-        while(ip < end):(ip += 1) {
-            switch(ip.*.get_op()) {
+        while (ip < end) : (ip += 1) {
+            switch (ip.*.get_op()) {
 
                 // -- int arithmatic
-                .addi => { add(.addi, ip.*, &self.stack, storage); },
-                .subi => { sub(.subi, ip.*, &self.stack, storage); },
-                .muli => { mul(.muli, ip.*, &self.stack, storage); },
-                .divi => { div(.divi, ip.*, &self.stack, storage); },
+                .addi => {
+                    add(.addi, ip.*, &self.stack, storage);
+                },
+                .subi => {
+                    sub(.subi, ip.*, &self.stack, storage);
+                },
+                .muli => {
+                    mul(.muli, ip.*, &self.stack, storage);
+                },
+                .divi => {
+                    div(.divi, ip.*, &self.stack, storage);
+                },
 
                 // -- float arithmatic
-                .addf => { add(.addf, ip.*, &self.stack, storage); },
-                .subf => { sub(.subf, ip.*, &self.stack, storage); },
-                .mulf => { mul(.mulf, ip.*, &self.stack, storage); },
-                .divf => { div(.divf, ip.*, &self.stack, storage); },
+                .addf => {
+                    add(.addf, ip.*, &self.stack, storage);
+                },
+                .subf => {
+                    sub(.subf, ip.*, &self.stack, storage);
+                },
+                .mulf => {
+                    mul(.mulf, ip.*, &self.stack, storage);
+                },
+                .divf => {
+                    div(.divf, ip.*, &self.stack, storage);
+                },
 
                 else => unreachable,
             }
         }
     }
 
-
     // ********************************************************************************
     /// ptr cast helper
-    fn ptr(comptime T: type, p: *u64) *T
-    { return @ptrCast(*T, @alignCast(@alignOf(T), p)); }
-
+    fn ptr(comptime T: type, p: *u64) *T {
+        return @ptrCast(*T, @alignCast(@alignOf(T), p));
+    }
 
     // ********************************************************************************
     /// returns arithmatic type of arithmatic opcodes
-    fn ArithTy(comptime op: Instruction.Opcode) type
-    {
-        return switch(op)
-        {
-            .addi => i64,
-            .subi => i64,
-            .muli => i64,
-            .divi => i64,
-
-            .addf => f64,
-            .subf => f64,
-            .mulf => f64,
-            .divf => f64,
-
-            else => unreachable
+    fn ArithTy(comptime op: Instruction.Opcode) type {
+        return switch (op) {
+            .addi, .subi, .muli, .divi => i64,
+            .addf, .subf, .mulf, .divf => f64,
+            else => unreachable,
         };
     }
 
-
     // ********************************************************************************
     /// execute addition instruction
-    fn add(comptime op: Instruction.Opcode, ins: Instruction, stack: []u64, storage: [2][]u64) void
-    {
+    fn add(comptime op: Instruction.Opcode, ins: Instruction, stack: []u64, storage: [2][]u64) void {
         const T = ArithTy(op);
         const args = Instruction.decode(op, ins);
         ptr(T, &stack[args.d]).* =
@@ -95,11 +93,9 @@ pub const Vm = extern struct
             ptr(T, &(storage[args.r & 1][args.r >> 1])).*;
     }
 
-
     // ********************************************************************************
     /// execute subtraction instruction
-    fn sub(comptime op: Instruction.Opcode, ins: Instruction, stack: []u64, storage: [2][]u64) void
-    {
+    fn sub(comptime op: Instruction.Opcode, ins: Instruction, stack: []u64, storage: [2][]u64) void {
         const T = ArithTy(op);
         const args = Instruction.decode(op, ins);
         ptr(T, &stack[args.d]).* =
@@ -109,8 +105,7 @@ pub const Vm = extern struct
 
     // ********************************************************************************
     /// execute multiplication instruction
-    fn mul(comptime op: Instruction.Opcode, ins: Instruction, stack: []u64, storage: [2][]u64) void
-    {
+    fn mul(comptime op: Instruction.Opcode, ins: Instruction, stack: []u64, storage: [2][]u64) void {
         const T = ArithTy(op);
         const args = Instruction.decode(op, ins);
         ptr(T, &stack[args.d]).* =
@@ -120,49 +115,43 @@ pub const Vm = extern struct
 
     // ********************************************************************************
     /// execute division instruction
-    fn div(comptime op: Instruction.Opcode, ins: Instruction, stack: []u64, storage: [2][]u64) void
-    {
+    fn div(comptime op: Instruction.Opcode, ins: Instruction, stack: []u64, storage: [2][]u64) void {
         const T = ArithTy(op);
         const args = Instruction.decode(op, ins);
 
-        if(comptime is_floating(T))
-        {
+        if (comptime is_floating(T)) {
             ptr(T, &stack[args.d]).* =
                 ptr(T, &(storage[args.l & 1][args.l >> 1])).* /
                 ptr(T, &(storage[args.r & 1][args.r >> 1])).*;
-        }
-        else
-        {
+        } else {
             // TODO: reevaluate integer division
             ptr(T, &stack[args.d]).* =
-                @divTrunc(ptr(T, &(storage[args.l & 1][args.l >> 1])).*,
-                          ptr(T, &(storage[args.r & 1][args.r >> 1])).*);
+                @divTrunc(ptr(T, &(storage[args.l & 1][args.l >> 1])).*, ptr(T, &(storage[args.r & 1][args.r >> 1])).*);
         }
     }
-
 
     // ********************************************************************************
     fn is_floating(comptime T: type) bool {
         return switch (@typeInfo(T)) {
             .Float => true,
-            .Int   => false,
-            else   => false,
-    };
-}
+            .Int => false,
+            else => false,
+        };
+    }
 };
 
 // helpers for encoding rk arguments
-fn r(v: Instruction.Basetype) Instruction.Basetype
-{ return v << 1; }
-fn k(v: Instruction.Basetype) Instruction.Basetype
-{ return r(v) | 1; }
+fn r(v: Instruction.Basetype) Instruction.Basetype {
+    return v << 1;
+}
+fn k(v: Instruction.Basetype) Instruction.Basetype {
+    return r(v) | 1;
+}
 
-test "vm"
-{
+test "vm" {
     var egovm = Vm{};
 
-    const program = [_] Instruction
-    {
+    const program = [_]Instruction{
         Instruction.odlr(.addi, 0, k(0), k(0)), // 13 + 13
         Instruction.odlr(.addi, 1, r(0), k(0)), // 26 + 13
         Instruction.odlr(.muli, 1, r(1), k(1)), // 39 * 2
@@ -173,5 +162,5 @@ test "vm"
 
     try egovm.execute(&program);
 
-    try std.testing.expectEqual(@as(i64,78), @ptrCast(*i64, &egovm.stack[1]).*);
+    try std.testing.expectEqual(@as(i64, 78), @ptrCast(*i64, &egovm.stack[1]).*);
 }

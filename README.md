@@ -15,13 +15,13 @@ Small toy interpreted scripting language written in Zig
 type vec2 = struct
     x,y numeric
 
-method vec2::lensqrd() numeric
+func vec2::lensqrd() numeric
     return .x * .x + .y * .y
 
-method vec2::len() numeric
-    return math.sqrt(.lensqrd())
+func vec2::len() numeric
+    return math::sqrt(.lensqrd())
 
-var pos = vec2: 1,1
+const pos = vec2: 1,1
 assert(pos.len() == 1.4142)
 ```
 

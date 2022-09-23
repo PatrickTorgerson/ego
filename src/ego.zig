@@ -14,7 +14,6 @@ pub const parse = @import("parse.zig");
 
 pub const dump = @import("ast-dump.zig");
 
-test "ego"
-{
+test "ego" {
     std.testing.refAllDecls(@This());
 }

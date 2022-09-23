@@ -11,8 +11,7 @@ const grammar = @import("grammar.zig");
 const Lexeme = @import("lex.zig").Lexeme;
 
 // ********************************************************************************
-pub const Ast = struct
-{
+pub const Ast = struct {
     source: [:0]const u8,
 
     nodes: std.MultiArrayList(Node),
@@ -22,8 +21,7 @@ pub const Ast = struct
 
     diagnostics: []const Diagnostic,
 
-    pub const Node = struct
-    {
+    pub const Node = struct {
         symbol: grammar.Symbol,
         lexeme: Index,
 
@@ -34,14 +32,12 @@ pub const Ast = struct
         pub const Index = usize;
     };
 
-    pub const Diagnostic = struct
-    {
+    pub const Diagnostic = struct {
         tag: Tag,
         lexeme: usize,
         expected: ?grammar.Terminal,
 
-        pub const Tag = enum
-        {
+        pub const Tag = enum {
             chained_comparison_operators,
             expected_top_level_decl,
             expected_expression,
@@ -52,21 +48,18 @@ pub const Ast = struct
         };
     };
 
-    pub fn deinit(this: *Ast, gpa: std.mem.Allocator) void
-    {
+    pub fn deinit(this: *Ast, gpa: std.mem.Allocator) void {
         this.nodes.deinit(gpa);
         this.lexemes.deinit(gpa);
         gpa.free(this.data);
     }
 
-    pub fn lexeme_str(this: Ast, node: Node) []const u8
-    {
+    pub fn lexeme_str(this: Ast, node: Node) []const u8 {
         const lexeme = this.lexemes.get(node.lexeme);
-        return this.source[lexeme.start .. lexeme.end];
+        return this.source[lexeme.start..lexeme.end];
     }
-    pub fn lexeme_str_lexi(this: Ast, lexi: usize) []const u8
-    {
+    pub fn lexeme_str_lexi(this: Ast, lexi: usize) []const u8 {
         const lexeme = this.lexemes.get(lexi);
-        return this.source[lexeme.start .. lexeme.end];
+        return this.source[lexeme.start..lexeme.end];
     }
 };

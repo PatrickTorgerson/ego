@@ -12,7 +12,7 @@ const dump = ego.dump.dump;
 
 const parsetest =
     \\
-    \\  var a,b,c int = 12/3/3/3/3/3+1, 2*(1+2), 3+1
+    \\  const a int = 3*(1+20/4);
     \\
 ;
 
@@ -35,7 +35,7 @@ pub fn main() !void
 
     std.debug.print("\n============================================\n\n", .{});
 
-    if(ast.diagnostics.len >= 0)
+    if(ast.diagnostics.len > 0)
     {
         for(ast.diagnostics) |d|
         {
@@ -44,6 +44,7 @@ pub fn main() !void
             { std.debug.print(": {s}", .{@tagName(d.expected.?)}); }
             std.debug.print(" at '{s}'\n",.{ast.lexeme_str_lexi(d.lexeme)});
         }
+        return;
     }
 
     try dump(ast);
