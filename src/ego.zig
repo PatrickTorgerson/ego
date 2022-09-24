@@ -6,7 +6,6 @@
 
 const std = @import("std");
 
-pub const Instruction = @import("instruction.zig").Instruction;
 pub const Value = @import("value.zig").Value;
 pub const Vm = @import("vm.zig").Vm;
 pub const Lexer = @import("lex.zig").Lexer;
