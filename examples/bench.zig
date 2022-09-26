@@ -10,15 +10,18 @@ const ego = @import("ego");
 
 const dump = ego.dump.dump;
 
-const parsetest =
+const src =
     \\
-    \\  const a int = 3*(1+20/4);
+    \\  const a,b = 2 * (5+4), 20*(50+40)
     \\
 ;
 
 pub fn main() !void
 {
-    var lexer = ego.Lexer.init(parsetest);
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const ally = gpa.allocator();
+
+    var lexer = ego.Lexer.init(src);
     var lexeme = lexer.next();
 
     while(lexeme.ty != .eof):(lexeme = lexer.next())
@@ -28,8 +31,8 @@ pub fn main() !void
 
     std.debug.print("\n============================================\n\n", .{});
 
-    var ast = try ego.parse.parse(std.testing.allocator, parsetest);
-    defer ast.deinit(std.testing.allocator);
+    var ast = try ego.parse.parse(ally, src);
+    defer ast.deinit(ally);
 
     std.debug.print("nodes : {}\n", .{ast.nodes.len});
 
@@ -48,4 +51,22 @@ pub fn main() !void
     }
 
     try dump(ast);
+
+    std.debug.print("\n============================================\n\n", .{});
+
+    const code = try ego.codegen.gen_code(ally, ast);
+
+    std.debug.print("code size : {}\n", .{code.buffer.len});
+
+    std.debug.print("\n============================================\n\n", .{});
+
+    var vm = ego.Vm{};
+    var stack: [256]u8 = undefined;
+    vm.kst = code.kst;
+    vm.stack = stack[0..];
+    var instructions = ego.InstructionBuffer{ .buffer = code.buffer };
+    try vm.execute(&instructions);
+
+    std.debug.print("  = {}\n", .{@ptrCast(*i64, @alignCast(@alignOf(*i64), &stack[0])).*});
+    std.debug.print("  = {}\n", .{@ptrCast(*i64, @alignCast(@alignOf(*i64), &stack[8])).*});
 }

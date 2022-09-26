@@ -69,7 +69,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
         .lexeme_ends = lexemes.items(.end),
         .lexi = 0,
         .indent_stack = try std.ArrayList(usize).initCapacity(gpa, 8),
-        .state_stack = try std.ArrayList(State).initCapacity(gpa, 128),
+        .state_stack = try std.ArrayList(State).initCapacity(gpa, 32),
         .nodes = .{},
         .data = .{},
         .work_stack = .{},
@@ -258,7 +258,15 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                 switch (parser.lexeme()) {
                     .minus, .bang => try parser.state_stack.append(.unary),
 
-                    .literal_int, .literal_float, .literal_hex, .literal_octal, .literal_binary, .literal_false, .literal_true, .literal_nil, .literal_string => {
+                    .literal_int,
+                    .literal_float,
+                    .literal_hex,
+                    .literal_octal,
+                    .literal_binary,
+                    .literal_false,
+                    .literal_true,
+                    .literal_nil,
+                    .literal_string => {
                         try parser.push_node(.{
                             .symbol = Symbol.init_literal(parser.lexeme()).?,
                             .lexeme = parser.lexi,
@@ -315,7 +323,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                 } else try parser.diag_expected(.rparen);
             },
 
-            // => TODO
+            // => TODO: this
             .unary => {
                 // switch(parser.lexeme())
                 // {

@@ -15,7 +15,7 @@ pub const Vm = struct {
     pub const Error = error{stack_overflow} || Value.Error;
 
     stack: []u8 = undefined,
-    kst: []u8 = undefined,
+    kst: []const u8 = undefined,
 
     /// Temporary helper for setting constants
     pub fn setk(this: *Vm, comptime T: type, i: usize, v: T) void {
@@ -34,7 +34,7 @@ pub const Vm = struct {
                     const d = instructions.read(u16);
                     const k = instructions.read(u16);
 
-                    ptr(u64, &base[@intCast(usize, d * 8)]).* = ptr(u64, &this.kst[@intCast(usize, k * 8)]).*;
+                    ptr(u64, &base[@intCast(usize, d * 8)]).* = const_ptr(u64, &this.kst[@intCast(usize, k * 8)]).*;
                 },
 
                 // -- arithmatic
@@ -44,7 +44,7 @@ pub const Vm = struct {
                 .subf => sub(.subf, base, instructions),
                 .muli => mul(.muli, base, instructions),
                 .mulf => mul(.mulf, base, instructions),
-                // .divi => div(.divi, base, instructions), TODO
+                // .divi => div(.divi, base, instructions), TODO: #2 this
                 .divf => div(.divf, base, instructions),
 
                 // --
@@ -63,6 +63,10 @@ pub const Vm = struct {
     /// ptr cast helper
     fn ptr(comptime T: type, p: *u8) *T {
         return @ptrCast(*T, @alignCast(@alignOf(T), p));
+    }
+    /// ptr cast helper
+    fn const_ptr(comptime T: type, p: *const u8) *const T {
+        return @ptrCast(*const T, @alignCast(@alignOf(T), p));
     }
 
     /// gets a pointer to T at 'index'
