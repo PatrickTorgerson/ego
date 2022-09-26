@@ -12,6 +12,7 @@ const Lexer = lexing.Lexer;
 const Lexeme = lexing.Lexeme;
 const Terminal = @import("grammar.zig").Terminal;
 const Symbol = @import("grammar.zig").Symbol;
+const State = Parser.State;
 
 const Ast = @import("ast.zig").Ast;
 
@@ -61,31 +62,31 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
 
     // -- parsing
 
-    var state = ParseState{
+    var parser = Parser{
         .gpa = gpa,
         .lexeme_ty = lexemes.items(.ty),
         .lexeme_starts = lexemes.items(.start),
         .lexeme_ends = lexemes.items(.end),
         .lexi = 0,
-        .indent_stack = try std.ArrayList(usize).initCapacity(gpa, 10),
-        .symbol_stack = try std.ArrayList(Symbol).initCapacity(gpa, 512),
+        .indent_stack = try std.ArrayList(usize).initCapacity(gpa, 8),
+        .state_stack = try std.ArrayList(State).initCapacity(gpa, 32),
         .nodes = .{},
         .data = .{},
         .work_stack = .{},
         .diagnostics = .{},
     };
-    defer state.indent_stack.deinit();
-    defer state.symbol_stack.deinit();
-    defer state.data.deinit(gpa);
-    defer state.work_stack.deinit(gpa);
-    defer state.diagnostics.deinit(gpa);
+    defer parser.indent_stack.deinit();
+    defer parser.state_stack.deinit();
+    defer parser.data.deinit(gpa);
+    defer parser.work_stack.deinit(gpa);
+    defer parser.diagnostics.deinit(gpa);
 
-    state.initial_indent();
-    state.symbol_stack.appendAssumeCapacity(.eof);
-    state.symbol_stack.appendAssumeCapacity(.top_decl_line_cont);
+    parser.initial_indent();
+    parser.state_stack.appendAssumeCapacity(.eof);
+    parser.state_stack.appendAssumeCapacity(.top_decl_line_cont);
 
     // root node
-    _ = try state.create_node(.{
+    _ = try parser.create_node(.{
         .symbol = .file,
         .lexeme = 0,
         .l = 0,
@@ -100,57 +101,61 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
     var node_count: usize = 0;
 
     // main parsing loop
-    loop: while (true) {
-        const symbol = state.pop_symbol();
-        std.debug.print("== {s: ^25} ==\n", .{@tagName(symbol)});
+    while (true) {
+        const state = parser.pop_state();
+        std.debug.print("== {s: ^25} ==\n", .{@tagName(state)});
 
-        switch (symbol) {
+        switch (state) {
             // => NEWLINE, top_level_decl, top_decl_cont, optional_semicolon
             .top_decl_line => {
-                if (state.consume(.newline)) |_| {
-                    try state.symbol_stack.appendSlice(&[_]Symbol{ .optional_semicolon, .top_decl_cont, .top_decl });
-                } else try state.diag_expected(.newline);
+                if (parser.consume(.newline)) |_| {
+                    try parser.state_stack.appendSlice(&[_]State{ .optional_semicolon, .top_decl_cont, .top_decl });
+                } else try parser.diag_expected(.newline);
             },
 
             // => [top_decl_line, top_decl_line_cont]
             .top_decl_line_cont => {
-                // advance past redundant newlines
-                while (state.check_next(.newline)) state.advance();
+                if(!parser.check(.eof)) {
+                    // advance past redundant newlines
+                    while (parser.check_next(.newline)) parser.advance();
 
-                if (!state.check_next(.eof)) {
-                    try state.symbol_stack.append(.top_decl_line_cont);
-                    try state.symbol_stack.append(.top_decl_line);
-                } else state.advance();
+                    if (!parser.check_next(.eof)) {
+                        try parser.state_stack.append(.top_decl_line_cont);
+                        try parser.state_stack.append(.top_decl_line);
+                    } else parser.advance();
+                }
             },
 
             // => [top_level_decl, top_decl_cont]
             .top_decl_cont => {
-                if (state.check(.semicolon) and !state.check_next(.newline)) {
-                    state.advance(); // semicolon
-                    try state.symbol_stack.append(.top_decl_cont);
-                    try state.symbol_stack.append(.top_decl);
+                // TODO: what if last line of file is terminated with a semicolon
+                //       this would result in check_next() panic: index out of bounds
+                if (parser.check(.semicolon) and !parser.check_next(.newline)) {
+                    parser.advance(); // semicolon
+                    try parser.state_stack.append(.top_decl_cont);
+                    try parser.state_stack.append(.top_decl);
                 }
             },
 
             // => [SEMICOLON]
             .optional_semicolon => {
-                _ = state.consume(.semicolon);
+                _ = parser.consume(.semicolon);
             },
 
             // => [KY_PUB], var_decl
             .top_decl => {
-                if (state.check(.semicolon)) {
+                if (parser.check(.semicolon)) {
                     // empty decl
-                    state.advance();
+                    parser.advance();
                 } else {
-                    _ = state.consume(.ky_pub);
-                    switch (state.lexeme()) {
+                    _ = parser.consume(.ky_pub);
+                    switch (parser.lexeme()) {
                         .ky_var, .ky_const => {
-                            try state.symbol_stack.append(.var_decl);
+                            try parser.state_stack.append(.var_decl);
                         },
                         else => {
-                            //try state.diag(.expected_top_level_decl);
-                            try state.symbol_stack.append(.expression);
+                            //try parser.diag(.expected_top_level_decl);
+                            try parser.state_stack.append(.expression);
                         },
                     }
                 }
@@ -159,34 +164,34 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
             // => KY_VAR, var_seq, EQUAL, expr_list
             // => KY_CONST, var_seq, EQUAL, expr_list
             .var_decl => {
-                try state.push(state.lexi); // lexeme
+                try parser.push(parser.lexi); // lexeme
 
                 // skip var or const
-                _ = state.consume(.ky_var) orelse state.consume(.ky_const).?;
+                _ = parser.consume(.ky_var) orelse parser.consume(.ky_const).?;
 
-                try state.symbol_stack.append(.create_var_decl_node);
-                try state.symbol_stack.append(.expr_list);
-                try state.symbol_stack.append(.expect_equal);
-                try state.symbol_stack.append(.create_var_seq_node);
-                try state.symbol_stack.append(.var_seq);
+                try parser.state_stack.append(.create_var_decl_node);
+                try parser.state_stack.append(.expr_list);
+                try parser.state_stack.append(.expect_equal);
+                try parser.state_stack.append(.create_var_seq_node);
+                try parser.state_stack.append(.var_seq);
             },
 
             // => IDENTIFIER, {COMMA, IDENTIFIER}, optional_type_expr
             .var_seq => {
-                if (state.check(.identifier)) {
-                    try state.push(state.lexi);
+                if (parser.check(.identifier)) {
+                    try parser.push(parser.lexi);
                     node_count += 1;
-                    state.advance();
-                    if (state.consume(.comma)) |_|
-                        try state.symbol_stack.append(.var_seq)
+                    parser.advance();
+                    if (parser.consume(.comma)) |_|
+                        try parser.state_stack.append(.var_seq)
                     else
-                        try state.symbol_stack.append(.optional_type_expr);
-                } else try state.diag_expected(.identifier);
+                        try parser.state_stack.append(.optional_type_expr);
+                } else try parser.diag_expected(.identifier);
             },
 
             // => [expression, expr_list_cont]
             .expr_list => {
-                switch (state.lexeme()) {
+                switch (parser.lexeme()) {
                     .minus,
                     .bang,
                     .literal_int,
@@ -200,8 +205,8 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                     .literal_string,
                     .lparen,
                     => {
-                        try state.symbol_stack.append(.expr_list_cont);
-                        try state.symbol_stack.append(.expression);
+                        try parser.state_stack.append(.expr_list_cont);
+                        try parser.state_stack.append(.expression);
                         node_count += 1;
                     },
                     else => {},
@@ -210,22 +215,22 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
 
             // => [COMMA, expression, expr_list_cont]
             .expr_list_cont => {
-                if (state.consume(.comma)) |_| {
-                    try state.symbol_stack.append(.expr_list_cont);
-                    try state.symbol_stack.append(.expression);
+                if (parser.consume(.comma)) |_| {
+                    try parser.state_stack.append(.expr_list_cont);
+                    try parser.state_stack.append(.expression);
                     node_count += 1;
                 }
             },
 
             // => [type_expr]
-            .optional_type_expr => switch (state.lexeme()) {
+            .optional_type_expr => switch (parser.lexeme()) {
                 .question_mark,
                 .ampersand,
                 .lbracket,
                 .identifier,
-                => try state.symbol_stack.append(.type_expr),
+                => try parser.state_stack.append(.type_expr),
                 else => {
-                    try state.push(0);
+                    try parser.push(0);
                 },
             },
 
@@ -235,10 +240,10 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
             // => LBRACKET, RBRACKET, type_expr
             // => LBRACKET, LITERAL_INT, RBRACKET, type_expr
             .type_expr => {
-                if (state.consume(.identifier)) |_| {
-                    try state.push_node(.{
+                if (parser.consume(.identifier)) |_| {
+                    try parser.push_node(.{
                         .symbol = .identifier,
-                        .lexeme = state.lexi - 1,
+                        .lexeme = parser.lexi - 1,
                         .l = 0,
                         .r = 0,
                     });
@@ -249,51 +254,59 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
             // => LITERAL, expr_cont
             // => LPAREN, expression, close_paren, expr_cont
             .expression => {
-                try state.symbol_stack.append(.expr_cont);
-                switch (state.lexeme()) {
-                    .minus, .bang => try state.symbol_stack.append(.unary),
+                try parser.state_stack.append(.expr_cont);
+                switch (parser.lexeme()) {
+                    .minus, .bang => try parser.state_stack.append(.unary),
 
-                    .literal_int, .literal_float, .literal_hex, .literal_octal, .literal_binary, .literal_false, .literal_true, .literal_nil, .literal_string => {
-                        try state.push_node(.{
-                            .symbol = Symbol.init_literal(state.lexeme()).?,
-                            .lexeme = state.lexi,
+                    .literal_int,
+                    .literal_float,
+                    .literal_hex,
+                    .literal_octal,
+                    .literal_binary,
+                    .literal_false,
+                    .literal_true,
+                    .literal_nil,
+                    .literal_string => {
+                        try parser.push_node(.{
+                            .symbol = Symbol.init_literal(parser.lexeme()).?,
+                            .lexeme = parser.lexi,
                             .l = 0,
                             .r = 0,
                         });
-                        state.advance();
+                        parser.advance();
                     },
 
                     .lparen => {
-                        state.advance();
+                        parser.advance();
 
                         // store precedence to recover later
-                        try state.push(prec);
+                        try parser.push(prec);
                         prec = 0;
 
-                        try state.symbol_stack.append(.close_paren);
-                        try state.symbol_stack.append(.expression);
+                        try parser.state_stack.append(.close_paren);
+                        try parser.state_stack.append(.expression);
                     },
 
                     else => {
-                        _ = state.pop_symbol(); // expr_cont
-                        try state.diag(.expected_expression);
+                        _ = parser.pop_state(); // expr_cont
+                        try parser.diag(.expected_expression);
                     },
                 }
             },
 
             // => [BINOP, expression]
-            .expr_cont => switch (state.lexeme()) {
+            .expr_cont => switch (parser.lexeme()) {
                 .plus, .minus, .star, .slash, .percent, .plus_plus, .star_star, .equal_equal, .bang_equal, .lesser, .lesser_equal, .greater, .greater_equal, .ampersand_ampersand, .pipe_pipe, .ky_and, .ky_or => {
-                    if (prec < precedence(state.lexeme())) {
-                        try state.push(state.lexi); // lexeme
-                        try state.push(prec); // prev prec
-                        prec = precedence(state.lexeme());
+                    if (prec < precedence(parser.lexeme())) {
+                        try parser.push(parser.lexi); // lexeme
+                        try parser.push(prec); // prev prec
+                        prec = precedence(parser.lexeme());
 
-                        state.advance();
+                        parser.advance();
 
-                        try state.symbol_stack.append(.expr_cont);
-                        try state.symbol_stack.append(.create_binop_node); // uses previously pushed lexeme to determine operator
-                        try state.symbol_stack.append(.expression);
+                        try parser.state_stack.append(.expr_cont);
+                        try parser.state_stack.append(.create_binop_node); // uses previously pushed lexeme to determine operator
+                        try parser.state_stack.append(.expression);
                     }
                 },
                 else => {},
@@ -301,22 +314,22 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
 
             // => RPAREN
             .close_paren => {
-                if (state.consume(.rparen)) |_| {
-                    prec = state.at(1); // restore precedence of enclosing expression
+                if (parser.consume(.rparen)) |_| {
+                    prec = parser.at(1); // restore precedence of enclosing expression
 
                     // move result node pop precedence
-                    state.set(1, state.at(0));
-                    _ = state.pop();
-                } else try state.diag_expected(.rparen);
+                    parser.set(1, parser.at(0));
+                    _ = parser.pop();
+                } else try parser.diag_expected(.rparen);
             },
 
-            // => TODO
+            // => TODO: this
             .unary => {
-                // switch(state.lexeme())
+                // switch(parser.lexeme())
                 // {
-                //     .minus => state.symbol_stack.append(.neg),
-                //     .bang =>  state.symbol_stack.append(.boolnot),
-                //     .tilde => state.symbol_stack.append(.bitnot),
+                //     .minus => parser.state_stack.append(.neg),
+                //     .bang =>  parser.state_stack.append(.boolnot),
+                //     .tilde => parser.state_stack.append(.bitnot),
                 //     else => {
                 //         // parse error, expected unary op
                 //     }
@@ -325,52 +338,52 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
 
             // => EQUAL
             .expect_equal => {
-                if (state.consume(.equal)) |_| {} else try state.diag_expected(.equal);
+                if (parser.consume(.equal)) |_| {} else try parser.diag_expected(.equal);
             },
 
             // -- node creation
 
             // -> rhs, prec, lexeme, lhs, ...
             .create_binop_node => {
-                const sym = Symbol.init_binop(state.lexeme_ty[state.at(2)]).?;
+                const sym = Symbol.init_binop(parser.lexeme_ty[parser.at(2)]).?;
                 std.debug.print("  - {s} {s} {s}\n", .{
                     @tagName(sym),
-                    @tagName(state.nodes.items(.symbol)[state.at(3)]),
-                    @tagName(state.nodes.items(.symbol)[state.at(0)]),
+                    @tagName(parser.nodes.items(.symbol)[parser.at(3)]),
+                    @tagName(parser.nodes.items(.symbol)[parser.at(0)]),
                 });
 
-                const node = try state.create_node(.{
+                const node = try parser.create_node(.{
                     .symbol = sym,
-                    .lexeme = state.at(2),
-                    .l = state.at(3),
-                    .r = state.at(0),
+                    .lexeme = parser.at(2),
+                    .l = parser.at(3),
+                    .r = parser.at(0),
                 });
 
-                prec = state.at(1);
+                prec = parser.at(1);
 
-                state.pop_slice(4);
-                try state.push(node);
+                parser.popn(4);
+                try parser.push(node);
             },
 
             // -> type_expr, identifier_lexeme..., ...
             .create_var_seq_node => {
-                const type_expr = state.at(0);
-                _ = state.pop();
+                const type_expr = parser.at(0);
+                _ = parser.pop();
 
                 assert(node_count > 0);
 
-                const node = try state.create_node(.{
+                const node = try parser.create_node(.{
                     .symbol = .var_seq,
-                    .lexeme = state.at(node_count - 1),
-                    .l = state.data.items.len,
+                    .lexeme = parser.at(node_count - 1),
+                    .l = parser.data.items.len,
                     .r = type_expr,
                 });
 
-                try state.data.append(gpa, node_count);
-                try state.data.appendSlice(gpa, state.top_slice(node_count));
+                try parser.data.append(gpa, node_count);
+                try parser.data.appendSlice(gpa, parser.top_slice(node_count));
 
-                state.pop_slice(node_count);
-                try state.push(node);
+                parser.popn(node_count);
+                try parser.push(node);
 
                 node_count = 0;
             },
@@ -378,53 +391,51 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
             // -> expresion..., var_seq, lexeme, ...
             .create_var_decl_node => {
                 if (node_count == 0)
-                    try state.diag(.expected_expression)
+                    try parser.diag(.expected_expression)
                 else {
-                    const rhs = state.data.items.len;
-                    try state.data.append(gpa, node_count);
-                    try state.data.appendSlice(gpa, state.top_slice(node_count));
-                    state.pop_slice(node_count);
+                    const rhs = parser.data.items.len;
+                    try parser.data.append(gpa, node_count);
+                    try parser.data.appendSlice(gpa, parser.top_slice(node_count));
+                    parser.popn(node_count);
 
-                    const node = try state.create_node(.{
+                    const node = try parser.create_node(.{
                         .symbol = .var_decl,
-                        .lexeme = state.at(1),
-                        .l = state.at(0),
+                        .lexeme = parser.at(1),
+                        .l = parser.at(0),
                         .r = rhs,
                     });
 
-                    state.pop_slice(2);
-                    try state.push(node);
+                    parser.popn(2);
+                    try parser.push(node);
 
                     node_count = 0;
                 }
             },
 
             .eof => {
-                if (state.lexeme() != .eof)
-                    try state.diag_expected(.eof);
-                break :loop;
+                if (parser.lexeme() != .eof)
+                    try parser.diag_expected(.eof);
+                break;
             },
-
-            else => unreachable,
         }
     }
 
     // update root node with top level decls
-    state.nodes.items(.l)[0] = state.data.items.len;
-    try state.data.appendSlice(gpa, state.work_stack.items[0..]);
-    state.nodes.items(.r)[0] = state.data.items.len;
+    parser.nodes.items(.l)[0] = parser.data.items.len;
+    try parser.data.appendSlice(gpa, parser.work_stack.items[0..]);
+    parser.nodes.items(.r)[0] = parser.data.items.len;
 
     return Ast{
         .source = lexer.source,
-        .nodes = state.nodes,
+        .nodes = parser.nodes,
         .lexemes = lexemes,
-        .data = state.data.toOwnedSlice(gpa),
-        .diagnostics = state.diagnostics.toOwnedSlice(gpa),
+        .data = parser.data.toOwnedSlice(gpa),
+        .diagnostics = parser.diagnostics.toOwnedSlice(gpa),
     };
 }
 
-/// active parsing state and helpre funcs
-const ParseState = struct {
+/// active parsing state and helper funcs
+const Parser = struct {
     gpa: std.mem.Allocator,
 
     // SOA lexeme data
@@ -434,7 +445,7 @@ const ParseState = struct {
     lexi: usize,
 
     indent_stack: std.ArrayList(usize),
-    symbol_stack: std.ArrayList(Symbol),
+    state_stack: std.ArrayList(Parser.State),
 
     nodes: std.MultiArrayList(Ast.Node),
 
@@ -446,8 +457,8 @@ const ParseState = struct {
 
     diagnostics: std.ArrayListUnmanaged(Ast.Diagnostic),
 
-    /// precesses sources initial indent
-    pub fn initial_indent(this: *ParseState) void {
+    /// processes source's initial indent
+    pub fn initial_indent(this: *Parser) void {
         assert(this.indent_stack.items.len == 0);
         assert(this.lexeme_ty[this.lexi] == .indent);
         const indent = this.lexeme_ends[this.lexi] - this.lexeme_starts[this.lexi];
@@ -457,33 +468,33 @@ const ParseState = struct {
     }
 
     /// returns current lexeme type
-    pub fn lexeme(this: ParseState) Terminal {
+    pub fn lexeme(this: Parser) Terminal {
         return this.lexeme_ty[this.lexi];
     }
 
     /// returns next lexeme's type
-    pub fn peek(this: ParseState) Terminal {
+    pub fn peek(this: Parser) Terminal {
         return this.lexeme_ty[this.lexi + 1];
     }
 
     /// advance to next lexeme
-    pub fn advance(this: *ParseState) void {
+    pub fn advance(this: *Parser) void {
         this.lexi += 1;
     }
 
     /// verifies current lexeme is of type 'terminal'
-    pub fn check(this: ParseState, terminal: Terminal) bool {
+    pub fn check(this: Parser, terminal: Terminal) bool {
         return this.lexeme_ty[this.lexi] == terminal;
     }
 
     /// verifies next lexeme is of type 'terminal'
-    pub fn check_next(this: ParseState, terminal: Terminal) bool {
+    pub fn check_next(this: Parser, terminal: Terminal) bool {
         return this.lexeme_ty[this.lexi + 1] == terminal;
     }
 
     /// return teriminal if lexeme is of type 'terminal', else null
     /// TODO: return index intead?
-    pub fn consume(this: *ParseState, terminal: Terminal) ?Terminal {
+    pub fn consume(this: *Parser, terminal: Terminal) ?Terminal {
         if (this.check(terminal)) {
             const t = this.lexeme_ty[this.lexi];
             this.advance();
@@ -492,74 +503,99 @@ const ParseState = struct {
     }
 
     /// pops symbol from symbol_stack
-    pub fn pop_symbol(this: *ParseState) Symbol {
-        return this.symbol_stack.pop();
+    pub fn pop_state(this: *Parser) Parser.State {
+        return this.state_stack.pop();
     }
 
     /// pushes new node onto this.nodes, returns index
-    pub fn create_node(this: *ParseState, node: Ast.Node) !Ast.Node.Index {
+    pub fn create_node(this: *Parser, node: Ast.Node) !Ast.Node.Index {
         try this.nodes.append(this.gpa, node);
         return this.nodes.len - 1;
     }
 
     /// returns work_stack[n], n from top
-    pub fn at(this: ParseState, n: usize) usize {
+    pub fn at(this: Parser, n: usize) usize {
         return this.work_stack.items[this.work_stack.items.len - (n + 1)];
     }
 
     /// sets work_stack[n] to v, n from top
-    pub fn set(this: *ParseState, n: usize, v: usize) void {
+    pub fn set(this: *Parser, n: usize, v: usize) void {
         this.work_stack.items[this.work_stack.items.len - (n + 1)] = v;
     }
 
     /// returns slice of top n items from work_stack
-    pub fn top_slice(this: *ParseState, n: usize) []usize {
+    pub fn top_slice(this: *Parser, n: usize) []usize {
         return this.work_stack.items[this.work_stack.items.len - n .. this.work_stack.items.len];
     }
 
     /// pops from work_statck
-    pub fn pop(this: *ParseState) usize {
+    pub fn pop(this: *Parser) usize {
         return this.work_stack.pop();
     }
 
     /// pops top n items from work_stack
-    pub fn pop_slice(this: *ParseState, n: usize) void {
+    pub fn popn(this: *Parser, n: usize) void {
         const amt = std.math.min(n, this.work_stack.items.len);
         this.work_stack.items.len -= amt;
     }
 
     /// push n to work_stack
-    pub fn push(this: *ParseState, n: usize) !void {
+    pub fn push(this: *Parser, n: usize) !void {
         try this.work_stack.append(this.gpa, n);
     }
 
-    // creates node, pushes index to work_stack
-    pub fn push_node(this: *ParseState, node: Ast.Node) !void {
+    /// creates node, pushes index to work_stack
+    pub fn push_node(this: *Parser, node: Ast.Node) !void {
         try this.push(try this.create_node(node));
     }
 
     /// log expected symbol diagnostic
-    pub fn diag_expected(this: *ParseState, expected: Terminal) error{OutOfMemory}!void {
+    pub fn diag_expected(this: *Parser, expected: Terminal) error{OutOfMemory}!void {
         @setCold(true);
         try this.diag_msg(.{ .tag = .expected_lexeme, .lexeme = this.lexi, .expected = expected });
     }
 
     /// log diagnostic
-    pub fn diag(this: *ParseState, tag: Ast.Diagnostic.Tag) error{OutOfMemory}!void {
+    pub fn diag(this: *Parser, tag: Ast.Diagnostic.Tag) error{OutOfMemory}!void {
         @setCold(true);
         try this.diag_msg(.{ .tag = tag, .lexeme = this.lexi, .expected = null });
     }
 
     /// log diagnostic
-    pub fn diag_msg(this: *ParseState, msg: Ast.Diagnostic) error{OutOfMemory}!void {
+    pub fn diag_msg(this: *Parser, msg: Ast.Diagnostic) error{OutOfMemory}!void {
         @setCold(true);
         try this.diagnostics.append(this.gpa, msg);
         std.debug.print("  !!  {s}  !!\n", .{@tagName(msg.tag)});
     }
+
+    /// enumerastion od parsing states
+    pub const State = enum {
+        top_decl_line,
+        top_decl_line_cont,
+        top_decl_cont,
+        optional_semicolon,
+        top_decl,
+        var_decl,
+        var_seq,
+        expr_list,
+        expr_list_cont,
+        optional_type_expr,
+        type_expr,
+        expression,
+        expr_cont,
+        close_paren,
+        unary,
+        expect_equal,
+        create_binop_node,
+        create_var_seq_node,
+        create_var_decl_node,
+        eof,
+    };
 };
 
 test "parse" {
-    // I just want the test-runner to see this file
-    const hello = null;
-    _ = hello;
+    var ast = try parse(std.testing.allocator, "const pi = 3.1415926");
+    defer ast.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 4), ast.nodes.len);
 }

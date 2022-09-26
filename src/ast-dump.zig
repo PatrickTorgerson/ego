@@ -143,7 +143,7 @@ pub fn dump(ast: Ast) !void {
             .not_equals,
             .less_than,
             .lesser_or_equal,
-            .greater_tha,
+            .greater_than,
             .greater_or_equal,
             .type_and,
             .type_or,

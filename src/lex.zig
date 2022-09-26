@@ -10,7 +10,7 @@ const assert = std.debug.assert;
 const Terminal = @import("grammar.zig").Terminal;
 
 // ********************************************************************************
-pub const Lexeme = extern struct {
+pub const Lexeme = struct {
     ty: Terminal,
     start: usize,
     end: usize,

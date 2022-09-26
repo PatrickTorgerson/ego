@@ -6,11 +6,12 @@
 
 const std = @import("std");
 
-pub const Instruction = @import("instruction.zig").Instruction;
 pub const Value = @import("value.zig").Value;
 pub const Vm = @import("vm.zig").Vm;
 pub const Lexer = @import("lex.zig").Lexer;
 pub const parse = @import("parse.zig");
+pub const codegen = @import("code-gen.zig");
+pub const InstructionBuffer = @import("instruction.zig").InstructionBuffer;
 
 pub const dump = @import("ast-dump.zig");
 

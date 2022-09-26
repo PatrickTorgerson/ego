@@ -7,59 +7,52 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
-const Instruction = @import("instruction.zig").Instruction;
+const InstructionBuffer = @import("instruction.zig").InstructionBuffer;
+const Opcode = @import("instruction.zig").Opcode;
 const Value = @import("value.zig").Value;
 
-// ********************************************************************************
-pub const Vm = extern struct {
+pub const Vm = struct {
     pub const Error = error{stack_overflow} || Value.Error;
 
-    stack: [256]u64 align(16) = undefined,
-    kst: [256]u64 align(16) = undefined,
+    stack: []u8 = undefined,
+    kst: []const u8 = undefined,
 
-    // ********************************************************************************
     /// Temporary helper for setting constants
-    pub fn setk(self: *Vm, comptime T: type, i: usize, v: T) void {
-        comptime assert(std.meta.bitCount(T) == 64);
-        ptr(T, &self.kst[i]).* = v;
+    pub fn setk(this: *Vm, comptime T: type, i: usize, v: T) void {
+        ptr(T, &this.kst[i * @sizeOf(T)]).* = v;
     }
 
-    // ********************************************************************************
-    pub fn execute(self: *Vm, program: []const Instruction) Error!void {
-        var ip: [*c]const Instruction = program.ptr;
-        const end: [*c]const Instruction = program.ptr + program.len;
+    /// execute ego bytecode
+    pub fn execute(this: *Vm, instructions: *InstructionBuffer) Error!void {
 
-        var storage = [2][]u64{ &self.stack, &self.kst };
+        const base = this.stack[0..];
 
-        while (ip < end) : (ip += 1) {
-            switch (ip.*.get_op()) {
+        while (instructions.buffer.len > 0) {
+            switch (instructions.read_op()) {
 
-                // -- int arithmatic
-                .addi => {
-                    add(.addi, ip.*, &self.stack, storage);
-                },
-                .subi => {
-                    sub(.subi, ip.*, &self.stack, storage);
-                },
-                .muli => {
-                    mul(.muli, ip.*, &self.stack, storage);
-                },
-                .divi => {
-                    div(.divi, ip.*, &self.stack, storage);
+                .const64 => {
+                    const d = instructions.read(u16);
+                    const k = instructions.read(u16);
+
+                    ptr(u64, &base[@intCast(usize, d * 8)]).* = const_ptr(u64, &this.kst[@intCast(usize, k * 8)]).*;
                 },
 
-                // -- float arithmatic
-                .addf => {
-                    add(.addf, ip.*, &self.stack, storage);
-                },
-                .subf => {
-                    sub(.subf, ip.*, &self.stack, storage);
-                },
-                .mulf => {
-                    mul(.mulf, ip.*, &self.stack, storage);
-                },
-                .divf => {
-                    div(.divf, ip.*, &self.stack, storage);
+                // -- arithmatic
+                .addi => add(.addi, base, instructions),
+                .addf => add(.addf, base, instructions),
+                .subi => sub(.subi, base, instructions),
+                .subf => sub(.subf, base, instructions),
+                .muli => mul(.muli, base, instructions),
+                .mulf => mul(.mulf, base, instructions),
+                // .divi => div(.divi, base, instructions), TODO: #2 this
+                .divf => div(.divf, base, instructions),
+
+                // --
+
+                .mov64 => {
+                    const d = instructions.read(u16);
+                    const s = instructions.read(u16);
+                    get(u64, d, base).* = get(u64, s, base).*;
                 },
 
                 else => unreachable,
@@ -67,67 +60,63 @@ pub const Vm = extern struct {
         }
     }
 
-    // ********************************************************************************
     /// ptr cast helper
-    fn ptr(comptime T: type, p: *u64) *T {
+    fn ptr(comptime T: type, p: *u8) *T {
         return @ptrCast(*T, @alignCast(@alignOf(T), p));
+    }
+    /// ptr cast helper
+    fn const_ptr(comptime T: type, p: *const u8) *const T {
+        return @ptrCast(*const T, @alignCast(@alignOf(T), p));
+    }
+
+    /// gets a pointer to T at 'index'
+    fn get(comptime T: type, index: u16, base: []u8) *T {
+        return ptr(T, &base[@intCast(usize, index * @sizeOf(T))]);
+    }
+
+    ///
+    fn add(comptime op: Opcode, base: []u8, instructions: *InstructionBuffer) void {
+        const T = ArithTy(op);
+        get(T, instructions.read(u16), base).* =
+            get(T, instructions.read(u16), base).* +
+            get(T, instructions.read(u16), base).*;
+    }
+
+    ///
+    fn sub(comptime op: Opcode, base: []u8, instructions: *InstructionBuffer) void {
+        const T = ArithTy(op);
+        get(T, instructions.read(u16), base).* =
+            get(T, instructions.read(u16), base).* -
+            get(T, instructions.read(u16), base).*;
+    }
+
+    ///
+    fn mul(comptime op: Opcode, base: []u8, instructions: *InstructionBuffer) void {
+        const T = ArithTy(op);
+        get(T, instructions.read(u16), base).* =
+            get(T, instructions.read(u16), base).* *
+            get(T, instructions.read(u16), base).*;
+    }
+
+    ///
+    fn div(comptime op: Opcode, base: []u8, instructions: *InstructionBuffer) void {
+        const T = ArithTy(op);
+        if(comptime is_floating(T)) {
+            get(T, instructions.read(u16), base).* =
+                get(T, instructions.read(u16), base).* /
+                get(T, instructions.read(u16), base).*;
+        }
+        else unreachable;
     }
 
     // ********************************************************************************
     /// returns arithmatic type of arithmatic opcodes
-    fn ArithTy(comptime op: Instruction.Opcode) type {
+    fn ArithTy(comptime op: Opcode) type {
         return switch (op) {
             .addi, .subi, .muli, .divi => i64,
             .addf, .subf, .mulf, .divf => f64,
             else => unreachable,
         };
-    }
-
-    // ********************************************************************************
-    /// execute addition instruction
-    fn add(comptime op: Instruction.Opcode, ins: Instruction, stack: []u64, storage: [2][]u64) void {
-        const T = ArithTy(op);
-        const args = Instruction.decode(op, ins);
-        ptr(T, &stack[args.d]).* =
-            ptr(T, &(storage[args.l & 1][args.l >> 1])).* +
-            ptr(T, &(storage[args.r & 1][args.r >> 1])).*;
-    }
-
-    // ********************************************************************************
-    /// execute subtraction instruction
-    fn sub(comptime op: Instruction.Opcode, ins: Instruction, stack: []u64, storage: [2][]u64) void {
-        const T = ArithTy(op);
-        const args = Instruction.decode(op, ins);
-        ptr(T, &stack[args.d]).* =
-            ptr(T, &(storage[args.l & 1][args.l >> 1])).* -
-            ptr(T, &(storage[args.r & 1][args.r >> 1])).*;
-    }
-
-    // ********************************************************************************
-    /// execute multiplication instruction
-    fn mul(comptime op: Instruction.Opcode, ins: Instruction, stack: []u64, storage: [2][]u64) void {
-        const T = ArithTy(op);
-        const args = Instruction.decode(op, ins);
-        ptr(T, &stack[args.d]).* =
-            ptr(T, &(storage[args.l & 1][args.l >> 1])).* *
-            ptr(T, &(storage[args.r & 1][args.r >> 1])).*;
-    }
-
-    // ********************************************************************************
-    /// execute division instruction
-    fn div(comptime op: Instruction.Opcode, ins: Instruction, stack: []u64, storage: [2][]u64) void {
-        const T = ArithTy(op);
-        const args = Instruction.decode(op, ins);
-
-        if (comptime is_floating(T)) {
-            ptr(T, &stack[args.d]).* =
-                ptr(T, &(storage[args.l & 1][args.l >> 1])).* /
-                ptr(T, &(storage[args.r & 1][args.r >> 1])).*;
-        } else {
-            // TODO: reevaluate integer division
-            ptr(T, &stack[args.d]).* =
-                @divTrunc(ptr(T, &(storage[args.l & 1][args.l >> 1])).*, ptr(T, &(storage[args.r & 1][args.r >> 1])).*);
-        }
     }
 
     // ********************************************************************************
@@ -140,27 +129,27 @@ pub const Vm = extern struct {
     }
 };
 
-// helpers for encoding rk arguments
-fn r(v: Instruction.Basetype) Instruction.Basetype {
-    return v << 1;
-}
-fn k(v: Instruction.Basetype) Instruction.Basetype {
-    return r(v) | 1;
-}
-
 test "vm" {
     var egovm = Vm{};
+    var stack : [100*8]u8 = undefined;
+    var kst : [100*8]u8 = undefined;
 
-    const program = [_]Instruction{
-        Instruction.odlr(.addi, 0, k(0), k(0)), // 13 + 13
-        Instruction.odlr(.addi, 1, r(0), k(0)), // 26 + 13
-        Instruction.odlr(.muli, 1, r(1), k(1)), // 39 * 2
+    var program align(16) = [_]u8{
+        0, @enumToInt(Opcode.const64), 0,0, 0,0,
+        0, @enumToInt(Opcode.const64), 1,0, 1,0,
+        0, @enumToInt(Opcode.addi), 3,0, 0,0, 1,0,
+        0, @enumToInt(Opcode.muli), 3,0, 3,0, 1,0,
+        0, @enumToInt(Opcode.mov64), 4,0, 3,0,
     };
+
+    egovm.stack = stack[0..];
+    egovm.kst = kst[0..];
 
     egovm.setk(i64, 0, 13);
     egovm.setk(i64, 1, 2);
 
-    try egovm.execute(&program);
+    var instructions = InstructionBuffer{ .buffer = program[0..] };
+    try egovm.execute(&instructions);
 
-    try std.testing.expectEqual(@as(i64, 78), @ptrCast(*i64, &egovm.stack[1]).*);
+    try std.testing.expectEqual(@as(i64, 30), @ptrCast(*i64, @alignCast(@alignOf(*i64), &stack[4*8])).*);
 }

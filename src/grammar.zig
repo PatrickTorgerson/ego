@@ -5,42 +5,17 @@
 // ********************************************************************************
 
 // ********************************************************************************
-/// non-terminal symbols in the ego grammar
+/// non-terminal symbols in the ego grammar, exhaustive list of node types
 pub const Symbol = enum(i32) {
     file,
-    endfile,
-    top_decl_line,
-    top_decl_line_cont,
-    top_decl,
-    top_decl_cont,
     var_decl,
-
-    optional_semicolon,
-
-    expression,
-    expr_cont,
-    unary,
-    call,
-    close_paren,
-
     var_seq,
-    var_seq_optional_type,
-    expr_list,
-    expr_list_cont,
-
     type_expr,
-    optional_type_expr,
-    full_type_expr,
-
-    expect_equal,
 
     identifier,
 
-    create_binop_node,
-    create_var_decl_node,
-    create_var_seq_node,
-
     // literals
+    // NOTE: order is important here, see Symbol.init_literal()
     literal_int,
     literal_float,
     literal_hex,
@@ -51,7 +26,8 @@ pub const Symbol = enum(i32) {
     literal_nil,
     literal_string,
 
-    // binops
+    // binary operators
+    // NOTE: order is important here, see Symbol.init_binop()
     add,
     sub,
     mul,
@@ -63,7 +39,7 @@ pub const Symbol = enum(i32) {
     not_equals,
     less_than,
     lesser_or_equal,
-    greater_tha,
+    greater_than,
     greater_or_equal,
     type_and,
     type_or,
@@ -90,9 +66,12 @@ pub const Symbol = enum(i32) {
 };
 
 // ********************************************************************************
-/// terminal symbols in the ego grammar
+/// terminal symbols in the ego grammar, exhaustive list of lexeme types
 pub const Terminal = enum(i32) {
-    plus,
+    // binary operators
+    // NOTE: order is important here, see Symbol.init_binop()
+    // NOTE: also important for parse.precedence()
+    plus = 0,
     minus,
     star,
     slash,
@@ -153,6 +132,8 @@ pub const Terminal = enum(i32) {
     ky_list,
     ky_map,
 
+    // literals
+    // NOTE: order is important here, see Symbol.init_literal()
     literal_int,
     literal_float,
     literal_hex,
