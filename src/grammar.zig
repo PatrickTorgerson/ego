@@ -8,7 +8,6 @@
 /// non-terminal symbols in the ego grammar
 pub const Symbol = enum(i32) {
     file,
-    endfile,
     top_decl_line,
     top_decl_line_cont,
     top_decl,
@@ -63,7 +62,7 @@ pub const Symbol = enum(i32) {
     not_equals,
     less_than,
     lesser_or_equal,
-    greater_tha,
+    greater_than,
     greater_or_equal,
     type_and,
     type_or,

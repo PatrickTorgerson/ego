@@ -61,7 +61,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
 
     // -- parsing
 
-    var state = ParseState{
+    var state = Parser{
         .gpa = gpa,
         .lexeme_ty = lexemes.items(.ty),
         .lexeme_starts = lexemes.items(.start),
@@ -100,7 +100,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
     var node_count: usize = 0;
 
     // main parsing loop
-    loop: while (true) {
+    while (true) {
         const symbol = state.pop_symbol();
         std.debug.print("== {s: ^25} ==\n", .{@tagName(symbol)});
 
@@ -348,7 +348,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
 
                 prec = state.at(1);
 
-                state.pop_slice(4);
+                state.popn(4);
                 try state.push(node);
             },
 
@@ -369,7 +369,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                 try state.data.append(gpa, node_count);
                 try state.data.appendSlice(gpa, state.top_slice(node_count));
 
-                state.pop_slice(node_count);
+                state.popn(node_count);
                 try state.push(node);
 
                 node_count = 0;
@@ -383,7 +383,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                     const rhs = state.data.items.len;
                     try state.data.append(gpa, node_count);
                     try state.data.appendSlice(gpa, state.top_slice(node_count));
-                    state.pop_slice(node_count);
+                    state.popn(node_count);
 
                     const node = try state.create_node(.{
                         .symbol = .var_decl,
@@ -392,7 +392,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                         .r = rhs,
                     });
 
-                    state.pop_slice(2);
+                    state.popn(2);
                     try state.push(node);
 
                     node_count = 0;
@@ -402,7 +402,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
             .eof => {
                 if (state.lexeme() != .eof)
                     try state.diag_expected(.eof);
-                break :loop;
+                break;
             },
 
             else => unreachable,
@@ -424,7 +424,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
 }
 
 /// active parsing state and helpre funcs
-const ParseState = struct {
+const Parser = struct {
     gpa: std.mem.Allocator,
 
     // SOA lexeme data
@@ -447,7 +447,7 @@ const ParseState = struct {
     diagnostics: std.ArrayListUnmanaged(Ast.Diagnostic),
 
     /// precesses sources initial indent
-    pub fn initial_indent(this: *ParseState) void {
+    pub fn initial_indent(this: *Parser) void {
         assert(this.indent_stack.items.len == 0);
         assert(this.lexeme_ty[this.lexi] == .indent);
         const indent = this.lexeme_ends[this.lexi] - this.lexeme_starts[this.lexi];
@@ -457,33 +457,33 @@ const ParseState = struct {
     }
 
     /// returns current lexeme type
-    pub fn lexeme(this: ParseState) Terminal {
+    pub fn lexeme(this: Parser) Terminal {
         return this.lexeme_ty[this.lexi];
     }
 
     /// returns next lexeme's type
-    pub fn peek(this: ParseState) Terminal {
+    pub fn peek(this: Parser) Terminal {
         return this.lexeme_ty[this.lexi + 1];
     }
 
     /// advance to next lexeme
-    pub fn advance(this: *ParseState) void {
+    pub fn advance(this: *Parser) void {
         this.lexi += 1;
     }
 
     /// verifies current lexeme is of type 'terminal'
-    pub fn check(this: ParseState, terminal: Terminal) bool {
+    pub fn check(this: Parser, terminal: Terminal) bool {
         return this.lexeme_ty[this.lexi] == terminal;
     }
 
     /// verifies next lexeme is of type 'terminal'
-    pub fn check_next(this: ParseState, terminal: Terminal) bool {
+    pub fn check_next(this: Parser, terminal: Terminal) bool {
         return this.lexeme_ty[this.lexi + 1] == terminal;
     }
 
     /// return teriminal if lexeme is of type 'terminal', else null
     /// TODO: return index intead?
-    pub fn consume(this: *ParseState, terminal: Terminal) ?Terminal {
+    pub fn consume(this: *Parser, terminal: Terminal) ?Terminal {
         if (this.check(terminal)) {
             const t = this.lexeme_ty[this.lexi];
             this.advance();
@@ -492,66 +492,66 @@ const ParseState = struct {
     }
 
     /// pops symbol from symbol_stack
-    pub fn pop_symbol(this: *ParseState) Symbol {
+    pub fn pop_symbol(this: *Parser) Symbol {
         return this.symbol_stack.pop();
     }
 
     /// pushes new node onto this.nodes, returns index
-    pub fn create_node(this: *ParseState, node: Ast.Node) !Ast.Node.Index {
+    pub fn create_node(this: *Parser, node: Ast.Node) !Ast.Node.Index {
         try this.nodes.append(this.gpa, node);
         return this.nodes.len - 1;
     }
 
     /// returns work_stack[n], n from top
-    pub fn at(this: ParseState, n: usize) usize {
+    pub fn at(this: Parser, n: usize) usize {
         return this.work_stack.items[this.work_stack.items.len - (n + 1)];
     }
 
     /// sets work_stack[n] to v, n from top
-    pub fn set(this: *ParseState, n: usize, v: usize) void {
+    pub fn set(this: *Parser, n: usize, v: usize) void {
         this.work_stack.items[this.work_stack.items.len - (n + 1)] = v;
     }
 
     /// returns slice of top n items from work_stack
-    pub fn top_slice(this: *ParseState, n: usize) []usize {
+    pub fn top_slice(this: *Parser, n: usize) []usize {
         return this.work_stack.items[this.work_stack.items.len - n .. this.work_stack.items.len];
     }
 
     /// pops from work_statck
-    pub fn pop(this: *ParseState) usize {
+    pub fn pop(this: *Parser) usize {
         return this.work_stack.pop();
     }
 
     /// pops top n items from work_stack
-    pub fn pop_slice(this: *ParseState, n: usize) void {
+    pub fn popn(this: *Parser, n: usize) void {
         const amt = std.math.min(n, this.work_stack.items.len);
         this.work_stack.items.len -= amt;
     }
 
     /// push n to work_stack
-    pub fn push(this: *ParseState, n: usize) !void {
+    pub fn push(this: *Parser, n: usize) !void {
         try this.work_stack.append(this.gpa, n);
     }
 
-    // creates node, pushes index to work_stack
-    pub fn push_node(this: *ParseState, node: Ast.Node) !void {
+    /// creates node, pushes index to work_stack
+    pub fn push_node(this: *Parser, node: Ast.Node) !void {
         try this.push(try this.create_node(node));
     }
 
     /// log expected symbol diagnostic
-    pub fn diag_expected(this: *ParseState, expected: Terminal) error{OutOfMemory}!void {
+    pub fn diag_expected(this: *Parser, expected: Terminal) error{OutOfMemory}!void {
         @setCold(true);
         try this.diag_msg(.{ .tag = .expected_lexeme, .lexeme = this.lexi, .expected = expected });
     }
 
     /// log diagnostic
-    pub fn diag(this: *ParseState, tag: Ast.Diagnostic.Tag) error{OutOfMemory}!void {
+    pub fn diag(this: *Parser, tag: Ast.Diagnostic.Tag) error{OutOfMemory}!void {
         @setCold(true);
         try this.diag_msg(.{ .tag = tag, .lexeme = this.lexi, .expected = null });
     }
 
     /// log diagnostic
-    pub fn diag_msg(this: *ParseState, msg: Ast.Diagnostic) error{OutOfMemory}!void {
+    pub fn diag_msg(this: *Parser, msg: Ast.Diagnostic) error{OutOfMemory}!void {
         @setCold(true);
         try this.diagnostics.append(this.gpa, msg);
         std.debug.print("  !!  {s}  !!\n", .{@tagName(msg.tag)});
