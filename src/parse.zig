@@ -115,17 +115,21 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
 
             // => [top_decl_line, top_decl_line_cont]
             .top_decl_line_cont => {
-                // advance past redundant newlines
-                while (parser.check_next(.newline)) parser.advance();
+                if(!parser.check(.eof)) {
+                    // advance past redundant newlines
+                    while (parser.check_next(.newline)) parser.advance();
 
-                if (!parser.check_next(.eof)) {
-                    try parser.state_stack.append(.top_decl_line_cont);
-                    try parser.state_stack.append(.top_decl_line);
-                } else parser.advance();
+                    if (!parser.check_next(.eof)) {
+                        try parser.state_stack.append(.top_decl_line_cont);
+                        try parser.state_stack.append(.top_decl_line);
+                    } else parser.advance();
+                }
             },
 
             // => [top_level_decl, top_decl_cont]
             .top_decl_cont => {
+                // TODO: what if last line of file is terminated with a semicolon
+                //       this would result in check_next() panic: index out of bounds
                 if (parser.check(.semicolon) and !parser.check_next(.newline)) {
                     parser.advance(); // semicolon
                     try parser.state_stack.append(.top_decl_cont);
@@ -401,8 +405,8 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
             },
 
             .eof => {
-                if (state.lexeme() != .eof)
-                    try state.diag_expected(.eof);
+                if (parser.lexeme() != .eof)
+                    try parser.diag_expected(.eof);
                 break;
             },
         }
@@ -582,7 +586,8 @@ const Parser = struct {
 };
 
 test "parse" {
-    // I just want the test-runner to see this file
-    const hello = null;
-    _ = hello;
+    var ast = try parse(std.testing.allocator, "const pi = 3.1415926");
+    defer ast.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 4), ast.nodes.len);
 }

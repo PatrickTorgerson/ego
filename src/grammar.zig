@@ -6,7 +6,7 @@
 
 // ********************************************************************************
 /// non-terminal symbols in the ego grammar, exhaustive list of node types
-pub const Symbol = enum {
+pub const Symbol = enum(i32) {
     file,
     var_decl,
     var_seq,
@@ -67,11 +67,11 @@ pub const Symbol = enum {
 
 // ********************************************************************************
 /// terminal symbols in the ego grammar, exhaustive list of lexeme types
-pub const Terminal = enum {
+pub const Terminal = enum(i32) {
     // binary operators
     // NOTE: order is important here, see Symbol.init_binop()
     // NOTE: also important for parse.precedence()
-    plus,
+    plus = 0,
     minus,
     star,
     slash,
