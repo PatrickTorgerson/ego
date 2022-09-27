@@ -11,18 +11,26 @@ Small toy interpreted scripting language written in Zig
 > NOTE : This is a proposed syntax and is subject to change.
 >       Currently only a basic virtual machine is implemented
 
-```go
-type vec2 = struct
-    x,y numeric
+```zig
+type Vec2 = struct
+    x,y float
 
-func vec2::lensqrd() numeric
+fn |vec2| lensqrd()
     return .x * .x + .y * .y
 
-func vec2::len() numeric
-    return math::sqrt(.lensqrd())
+fn |vec2| len()
+    return ego::sqrt(.lensqrd())
 
-const pos = vec2: 1,1
+fn |&Vec2| normalize()
+    const len = .len()
+    .x /= len
+    .y /= len
+
+const pos = Vec2: 1,1
 assert(pos.len() == 1.4142)
+
+pos.normalize()
+assert(pos.len() == 1)
 ```
 
 ## Licence
