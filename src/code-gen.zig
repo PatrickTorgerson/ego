@@ -8,6 +8,7 @@ const std = @import("std");
 const Ast = @import("ast.zig").Ast;
 const Opcode = @import("instruction.zig").Opcode;
 const Symbol = @import("grammar.zig").Symbol;
+const ReverseIter = @import("iterator.zig").ReverseIter;
 const State = Gen.State;
 
 pub const CodePage = struct {
@@ -30,7 +31,7 @@ pub fn gen_code(allocator: std.mem.Allocator, ast: Ast) !CodePage {
         .locals = std.StringHashMap(usize).init(allocator),
         .uninitialized_locals = std.ArrayList([]const u8).init(allocator),
         // TODO: estimate capacity for .node_stack and .state_stack
-        .node_stack = try std.ArrayList(Ast.Node.Index).initCapacity(allocator, 32),
+        .node_stack = try std.ArrayList(Ast.Index).initCapacity(allocator, 32),
         .state_stack = try std.ArrayList(State).initCapacity(allocator, 32),
     };
     defer gen.ins_buffer.deinit();
@@ -140,7 +141,7 @@ const Gen = struct {
     locals: std.StringHashMap(usize),
     uninitialized_locals: std.ArrayList([]const u8),
 
-    node_stack: std.ArrayList(Ast.Node.Index),
+    node_stack: std.ArrayList(Ast.Index),
     state_stack: std.ArrayList(Gen.State),
 
     /// alignment specifys the requested alignment for the instruction's payload,
@@ -172,7 +173,7 @@ const Gen = struct {
     ///
     pub fn getk(this: *Gen, node: Ast.Node, ast: Ast) !u16 {
         switch(node.symbol) {
-            .literal_float,
+            // TODO: .literal_float,
             .literal_hex,
             .literal_octal,
             .literal_binary,
@@ -229,10 +230,10 @@ const Gen = struct {
             // .r = range(data) -> initializers...
             // initializers = node index
             .var_decl => {
-                var initializer_count = ast.data[node.r];
-                while (initializer_count > 0) : (initializer_count -= 1) {
-                    try gen.node_stack.append(ast.data[node.r + initializer_count]);
-
+                const initializers = ast.range(node.r);
+                var iter = ReverseIter(Ast.Index).init(initializers);
+                while(iter.next()) |init_node| {
+                    try gen.node_stack.append(init_node);
                     try gen.state_stack.append(.var_init);
                     try gen.state_stack.append(.node);
                 }
@@ -248,12 +249,13 @@ const Gen = struct {
                 // ignore type expression (.r), will be removed from var_seq grammar
 
                 // add locals to map, initialize later (State.var_init)
-                var identifier_count = ast.data[node.l];
-                while (identifier_count > 0) : (identifier_count -= 1) {
-                    const identifier = ast.lexeme_str_lexi(ast.data[node.l + identifier_count]);
+                const identifiers = ast.range(node.l);
+                var iter = ReverseIter(Ast.Index).init(identifiers);
+                while(iter.next()) |lexi| {
+                    const identifier = ast.lexeme_str_lexi(lexi);
                     var entry = try gen.locals.getOrPut(identifier);
                     if(entry.found_existing) {
-                        // error: local already exists
+                        // TODO: error: local already exists
                         // dummy placeholder
                         try gen.uninitialized_locals.append("_");
                     }
@@ -271,6 +273,7 @@ const Gen = struct {
             .literal_octal,
             .literal_binary,
             .literal_int => {
+                // TODO: this entire block is a fucking mess
                 const value_size = 8;
                 const k = try gen.getk(node, ast);
                 try gen.write_op(.const64, 2);
@@ -298,7 +301,6 @@ const Gen = struct {
             .div => {
                 try gen.node_stack.append(node.r);
                 try gen.node_stack.append(node.l);
-
                 try gen.state_stack.append(Gen.State.init(node.symbol).?);
                 try gen.state_stack.append(.node);
                 try gen.state_stack.append(.node);

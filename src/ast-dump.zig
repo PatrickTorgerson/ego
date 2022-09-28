@@ -52,7 +52,7 @@ pub fn dump(ast: Ast) !void {
     out.indents.len = 0;
 
     // stack of nodes to be dumped
-    var nodes = std.ArrayList(Ast.Node.Index).init(std.testing.allocator);
+    var nodes = std.ArrayList(Ast.Index).init(std.testing.allocator);
     defer nodes.deinit();
 
     // append top level decl nodes

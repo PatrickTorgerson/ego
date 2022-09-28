@@ -450,7 +450,7 @@ const Parser = struct {
     nodes: std.MultiArrayList(Ast.Node),
 
     // node indecies describing tree structure
-    data: std.ArrayListUnmanaged(Ast.Node.Index),
+    data: std.ArrayListUnmanaged(Ast.Index),
 
     // temporary workspace for building nodes
     work_stack: std.ArrayListUnmanaged(usize),
@@ -508,7 +508,7 @@ const Parser = struct {
     }
 
     /// pushes new node onto this.nodes, returns index
-    pub fn create_node(this: *Parser, node: Ast.Node) !Ast.Node.Index {
+    pub fn create_node(this: *Parser, node: Ast.Node) !Ast.Index {
         try this.nodes.append(this.gpa, node);
         return this.nodes.len - 1;
     }

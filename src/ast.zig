@@ -12,15 +12,19 @@ const Lexeme = @import("lex.zig").Lexeme;
 
 // ********************************************************************************
 pub const Ast = struct {
+
+    pub const Index = usize;
+
     source: [:0]const u8,
 
     nodes: std.MultiArrayList(Node),
     lexemes: std.MultiArrayList(Lexeme),
 
-    data: []Node.Index,
+    data: []Index,
 
     diagnostics: []const Diagnostic,
 
+    ///
     pub const Node = struct {
         symbol: grammar.Symbol,
         lexeme: Index,
@@ -29,9 +33,9 @@ pub const Ast = struct {
         // depending on Node.symbol
         l: Index,
         r: Index,
-        pub const Index = usize;
     };
 
+    ///
     pub const Diagnostic = struct {
         tag: Tag,
         lexeme: usize,
@@ -48,10 +52,26 @@ pub const Ast = struct {
         };
     };
 
+//     ///
+//     pub const Range1 = struct {
+//         slice: []Node.Index,
+//     };
+//
+//     ///
+//     pub const Range2 = struct {
+//         slice: []Node.Index,
+//     };
+
+    pub fn range(ast: Ast, data_offset: Index) []Index {
+        const size = ast.data[data_offset];
+        return ast.data[data_offset + 1 .. data_offset + size + 1];
+    }
+
     pub fn deinit(this: *Ast, gpa: std.mem.Allocator) void {
         this.nodes.deinit(gpa);
         this.lexemes.deinit(gpa);
         gpa.free(this.data);
+        // TODO: deinit diagnostics??
     }
 
     pub fn lexeme_str(this: Ast, node: Node) []const u8 {
