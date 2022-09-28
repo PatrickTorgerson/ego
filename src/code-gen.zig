@@ -9,6 +9,7 @@ const Ast = @import("ast.zig").Ast;
 const Opcode = @import("instruction.zig").Opcode;
 const Symbol = @import("grammar.zig").Symbol;
 const ReverseIter = @import("iterator.zig").ReverseIter;
+pub const BufferStack = @import("buffer_stack.zig").BufferStack;
 const State = Gen.State;
 
 pub const CodePage = struct {
@@ -27,7 +28,7 @@ pub fn gen_code(allocator: std.mem.Allocator, ast: Ast) !CodePage {
         .allocator = allocator,
         .ins_buffer = try std.ArrayList(u8).initCapacity(allocator, ast.nodes.len),
         .operand_stack = std.ArrayList(StackEntry).init(allocator),
-        .kst = std.ArrayList(u8).init(allocator),
+        .kst = BufferStack.init(allocator),
         .locals = std.StringHashMap(usize).init(allocator),
         .uninitialized_locals = std.ArrayList([]const u8).init(allocator),
         // TODO: estimate capacity for .node_stack and .state_stack
@@ -122,7 +123,7 @@ pub fn gen_code(allocator: std.mem.Allocator, ast: Ast) !CodePage {
 
     return CodePage {
         .buffer = gen.ins_buffer.toOwnedSlice(),
-        .kst = gen.kst.toOwnedSlice(),
+        .kst = gen.kst.to_owned_slice(),
     };
 }
 
@@ -131,12 +132,12 @@ const Gen = struct {
     allocator: std.mem.Allocator,
 
     ins_buffer: std.ArrayList(u8),
-    top: usize = 0,
 
     operand_stack: std.ArrayList(StackEntry),
 
-    kst: std.ArrayList(u8),
-    kst_top: usize = 0,
+    top: usize = 0,
+
+    kst: BufferStack,
 
     locals: std.StringHashMap(usize),
     uninitialized_locals: std.ArrayList([]const u8),
@@ -166,26 +167,21 @@ const Gen = struct {
     }
 
     ///
-    pub fn align_top(this: *Gen, alignment: usize) void {
-        this.top += padding(this.top, alignment);
+    pub fn align_top(gen: *Gen, alignment: usize) void {
+        gen.top += padding(gen.top, alignment);
     }
 
     ///
-    pub fn getk(this: *Gen, node: Ast.Node, ast: Ast) !u16 {
+    pub fn getk(gen: *Gen, node: Ast.Node, ast: Ast) !u16 {
         switch(node.symbol) {
             // TODO: .literal_float,
             .literal_hex,
             .literal_octal,
             .literal_binary,
             .literal_int => {
-                const val: i64 = try std.fmt.parseInt(i64, ast.lexeme_str(node), 0);
                 // TODO: check if 'val' already exists
-                const pads = padding(this.kst_top, 8);
-                this.kst_top += pads;
-                const k = @intCast(u16, this.kst_top / 8);
-                try this.kst.appendNTimes(0, pads);
-                try this.kst.appendSlice(std.mem.asBytes(&val));
-                this.kst_top += 8;
+                const val: i64 = try std.fmt.parseInt(i64, ast.lexeme_str(node), 0);
+                const k = @intCast(u16, try gen.kst.push(i64, val));
                 return k;
             },
 
