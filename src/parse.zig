@@ -176,16 +176,14 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                 try parser.state_stack.append(.var_seq);
             },
 
-            // => IDENTIFIER, {COMMA, IDENTIFIER}, optional_type_expr
+            // => IDENTIFIER, {COMMA, IDENTIFIER}
             .var_seq => {
                 if (parser.check(.identifier)) {
                     try parser.push(parser.lexi);
                     node_count += 1;
                     parser.advance();
                     if (parser.consume(.comma)) |_|
-                        try parser.state_stack.append(.var_seq)
-                    else
-                        try parser.state_stack.append(.optional_type_expr);
+                        try parser.state_stack.append(.var_seq);
                 } else try parser.diag_expected(.identifier);
             },
 
@@ -365,18 +363,15 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                 try parser.push(node);
             },
 
-            // -> type_expr, identifier_lexeme..., ...
+            // -> identifier_lexeme..., ...
             .create_var_seq_node => {
-                const type_expr = parser.at(0);
-                _ = parser.pop();
-
                 assert(node_count > 0);
 
                 const node = try parser.create_node(.{
                     .symbol = .var_seq,
                     .lexeme = parser.at(node_count - 1),
                     .l = parser.data.items.len,
-                    .r = type_expr,
+                    .r = 0,
                 });
 
                 try parser.data.append(gpa, node_count);

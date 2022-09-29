@@ -6,6 +6,7 @@
 
 const std = @import("std");
 const Ast = @import("ast.zig").Ast;
+const ReverseIter = @import("iterator.zig").ReverseIter;
 
 const grammar = @import("grammar.zig");
 
@@ -89,35 +90,43 @@ pub fn dump(ast: Ast) !void {
         out.print(@tagName(node.symbol));
 
         switch (node.symbol) {
+
+            // .l = node -> var_seq
+            // .r = range(data) -> initializers...
+            // initializers = node index
             .var_decl => {
                 std.debug.print(": {s}", .{ast.lexeme_str(node)});
 
                 out.inc(4);
                 try nodes.append(ast.nodes.len);
 
-                var count = ast.data[node.r];
-                while (count > 0) : (count -= 1)
-                    try nodes.append(ast.data[node.r + count]);
+                const initializers = ast.range(node.r);
+                var iter = ReverseIter(Ast.Index).init(initializers);
+                while(iter.next()) |init_node| {
+                    try nodes.append(init_node);
+                }
 
                 try nodes.append(node.l); // var_seq
             },
 
+            // .l = range(data) -> identifiers... (lexi)
+            // .r = unused
+            // identifiers = lexeme index
             .var_seq => {
                 out.inc(4);
-                try nodes.append(ast.nodes.len);
 
-                try nodes.append(node.r); // type_expr
-
-                out.inc(4);
-                const count = ast.data[node.l];
-                var n: usize = 0;
-                while (n < count) : (n += 1) {
+                const identifiers = ast.range(node.l);
+                var iter = ReverseIter(Ast.Index).init(identifiers);
+                while(iter.next()) |lexi| {
                     out.line();
-                    out.print(ast.lexeme_str_lexi(ast.data[node.l + n + 1]));
+                    out.print(ast.lexeme_str_lexi(lexi));
                 }
+
                 out.dec();
             },
 
+            // .l = unused
+            // .r = unused
             .identifier,
             .literal_int,
             .literal_float,
@@ -132,6 +141,8 @@ pub fn dump(ast: Ast) !void {
                 std.debug.print(": {s}", .{ast.lexeme_str(node)});
             },
 
+            // .l = node (literal | binop | unop | fn_call | ...)
+            // .r = node (literal | binop | unop | fn_call | ...)
             .add,
             .sub,
             .mul,
@@ -157,7 +168,10 @@ pub fn dump(ast: Ast) !void {
                 try nodes.append(node.l);
             },
 
-            else => unreachable,
+            // TODO: implement
+            .type_expr,
+            .eof,
+            .file => unreachable,
         }
 
         out.line();

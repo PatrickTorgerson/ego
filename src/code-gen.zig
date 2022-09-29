@@ -135,6 +135,8 @@ const Gen = struct {
 
     operand_stack: std.ArrayList(StackEntry),
 
+    // represents the top od the psudo-stack
+    // simulated runtime stack, used to determine local stack indeces
     top: usize = 0,
 
     kst: BufferStack,
@@ -167,8 +169,11 @@ const Gen = struct {
     }
 
     ///
-    pub fn align_top(gen: *Gen, alignment: usize) void {
-        gen.top += padding(gen.top, alignment);
+    pub fn psudo_push(gen: *Gen, comptime T: type) u16 {
+        gen.top += padding(gen.top, @sizeOf(T));
+        const offset = gen.top;
+        gen.top += @sizeOf(T);
+        return @intCast(u16, offset / @sizeOf(T));
     }
 
     ///
@@ -201,9 +206,7 @@ const Gen = struct {
             gen.top = rhs.stack_index + 8;
         }
         else {
-            gen.align_top(8);
-            d = @intCast(u16, gen.top / 8);
-            gen.top += 8;
+            d = gen.psudo_push(u64);
         }
 
         try gen.operand_stack.append(.{
@@ -239,11 +242,9 @@ const Gen = struct {
             },
 
             // .l = range(data) -> identifiers... (lexi)
-            // .r = node -> type_expr
+            // .r = unused
             // identifiers = lexeme index
             .var_seq => {
-                // ignore type expression (.r), will be removed from var_seq grammar
-
                 // add locals to map, initialize later (State.var_init)
                 const identifiers = ast.range(node.l);
                 var iter = ReverseIter(Ast.Index).init(identifiers);
@@ -269,16 +270,11 @@ const Gen = struct {
             .literal_octal,
             .literal_binary,
             .literal_int => {
-                // TODO: this entire block is a fucking mess
-                const value_size = 8;
                 const k = try gen.getk(node, ast);
+                const stack_index = gen.psudo_push(u64);
+
                 try gen.write_op(.const64, 2);
-                // dest
-                gen.align_top(value_size);
-                const stack_index = @intCast(u16, gen.top / value_size);
                 try gen.write(u16, stack_index);
-                gen.top += value_size;
-                // src
                 try gen.write(u16, k);
 
                 try gen.operand_stack.append(.{
