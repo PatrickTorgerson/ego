@@ -12,7 +12,7 @@ const dump = ego.dump.dump;
 
 const src =
     \\
-    \\  const a,b = 2 * (5+4), 20*(50+40)
+    \\  const a,b = 2 * (5+4), (3.14 * 2.0) - 1.0
     \\
 ;
 
@@ -67,6 +67,6 @@ pub fn main() !void
     var instructions = ego.InstructionBuffer{ .buffer = code.buffer };
     try vm.execute(&instructions);
 
-    std.debug.print("  = {}\n", .{@ptrCast(*i64, @alignCast(@alignOf(*i64), &stack[0])).*});
-    std.debug.print("  = {}\n", .{@ptrCast(*i64, @alignCast(@alignOf(*i64), &stack[8])).*});
+    std.debug.print("  = {d}\n", .{@ptrCast(*i64, @alignCast(@alignOf(*i64), &stack[0])).*});
+    std.debug.print("  = {d}\n", .{@ptrCast(*f64, @alignCast(@alignOf(*i64), &stack[8])).*});
 }

@@ -9,7 +9,9 @@ const Ast = @import("ast.zig").Ast;
 const Opcode = @import("instruction.zig").Opcode;
 const Symbol = @import("grammar.zig").Symbol;
 const ReverseIter = @import("iterator.zig").ReverseIter;
-pub const BufferStack = @import("buffer_stack.zig").BufferStack;
+const BufferStack = @import("buffer_stack.zig").BufferStack;
+const Type = @import("type.zig").Type;
+const TypeTable = @import("type.zig").TypeTable;
 const State = Gen.State;
 
 pub const CodePage = struct {
@@ -26,6 +28,8 @@ pub fn gen_code(allocator: std.mem.Allocator, ast: Ast) !CodePage {
 
     var gen = Gen{
         .allocator = allocator,
+        .ast = &ast,
+        .type_table = &TypeTable.init(allocator),
         .ins_buffer = try std.ArrayList(u8).initCapacity(allocator, ast.nodes.len),
         .operand_stack = std.ArrayList(StackEntry).init(allocator),
         .kst = BufferStack.init(allocator),
@@ -65,7 +69,7 @@ pub fn gen_code(allocator: std.mem.Allocator, ast: Ast) !CodePage {
 
         switch (state) {
 
-            .node => try gen.do_node(ast),
+            .node => try gen.do_node(),
 
             .next_top_decl => {
                 if(gen.node_stack.items.len > 0)
@@ -81,43 +85,10 @@ pub fn gen_code(allocator: std.mem.Allocator, ast: Ast) !CodePage {
                 }
             },
 
-            .gen_add => {
-                const rhs = gen.operand_stack.pop();
-                const lhs = gen.operand_stack.pop();
-                // TODO: actual types
-                if(rhs.tid == 1 and lhs.tid == 1) {
-                    try gen.write_op(.addi, 2);
-                    try gen.write_binop_args(lhs, rhs);
-                }
-            },
-
-            .gen_sub => {
-                const rhs = gen.operand_stack.pop();
-                const lhs = gen.operand_stack.pop();
-                // TODO: actual types
-                if(rhs.tid == 1 and lhs.tid == 1) {
-                    try gen.write_op(.subi, 2);
-                    try gen.write_binop_args(lhs, rhs);
-                }
-            },
-            .gen_mul => {
-                const rhs = gen.operand_stack.pop();
-                const lhs = gen.operand_stack.pop();
-                // TODO: actual types
-                if(rhs.tid == 1 and lhs.tid == 1) {
-                    try gen.write_op(.muli, 2);
-                    try gen.write_binop_args(lhs, rhs);
-                }
-            },
-            .gen_div => {
-                const rhs = gen.operand_stack.pop();
-                const lhs = gen.operand_stack.pop();
-                // TODO: actual types
-                if(rhs.tid == 1 and lhs.tid == 1) {
-                    try gen.write_op(.divi, 2);
-                    try gen.write_binop_args(lhs, rhs);
-                }
-            },
+            .gen_add => try gen.gen_binop(.gen_add),
+            .gen_sub => try gen.gen_binop(.gen_sub),
+            .gen_mul => try gen.gen_binop(.gen_mul),
+            .gen_div => try gen.gen_binop(.gen_div),
         }
     }
 
@@ -130,6 +101,8 @@ pub fn gen_code(allocator: std.mem.Allocator, ast: Ast) !CodePage {
 const Gen = struct {
 
     allocator: std.mem.Allocator,
+    ast: *const Ast,
+    type_table: *TypeTable,
 
     ins_buffer: std.ArrayList(u8),
 
@@ -147,89 +120,16 @@ const Gen = struct {
     node_stack: std.ArrayList(Ast.Index),
     state_stack: std.ArrayList(Gen.State),
 
-    /// alignment specifys the requested alignment for the instruction's payload,
-    /// padding bytes will be inserted before op to accomodate
-    pub fn write_op(this: *Gen, op: Opcode, alignment: usize) !void {
-        const pads = padding(this.ins_buffer.items.len + 1, alignment);
-        try this.ins_buffer.appendNTimes(0, pads);
-        try this.ins_buffer.append(@enumToInt(op));
-    }
-
-    ///
-    pub fn write(this: *Gen, comptime T: type, val: T) !void {
-        try this.ins_buffer.appendSlice(std.mem.asBytes(&val));
-    }
-
-    ///
-    pub fn padding(offset: usize, alignment: usize) usize
-    {
-        const mod = offset % alignment;
-        if(mod == 0) return 0
-        else return alignment - mod;
-    }
-
-    ///
-    pub fn psudo_push(gen: *Gen, comptime T: type) u16 {
-        gen.top += padding(gen.top, @sizeOf(T));
-        const offset = gen.top;
-        gen.top += @sizeOf(T);
-        return @intCast(u16, offset / @sizeOf(T));
-    }
-
-    ///
-    pub fn getk(gen: *Gen, node: Ast.Node, ast: Ast) !u16 {
-        switch(node.symbol) {
-            // TODO: .literal_float,
-            .literal_hex,
-            .literal_octal,
-            .literal_binary,
-            .literal_int => {
-                // TODO: check if 'val' already exists
-                const val: i64 = try std.fmt.parseInt(i64, ast.lexeme_str(node), 0);
-                const k = @intCast(u16, try gen.kst.push(i64, val));
-                return k;
-            },
-
-            else => return error.expected_literal_node,
-        }
-    }
-
-    ///
-    pub fn write_binop_args(gen: *Gen, lhs: StackEntry, rhs: StackEntry) !void {
-        var d: u16 = 0;
-        if(lhs.temp) {
-            d = lhs.stack_index;
-            gen.top = lhs.stack_index + 8;
-        }
-        else if(rhs.temp) {
-            d = rhs.stack_index;
-            gen.top = rhs.stack_index + 8;
-        }
-        else {
-            d = gen.psudo_push(u64);
-        }
-
-        try gen.operand_stack.append(.{
-            .tid = 1,
-            .stack_index = d,
-            .temp = true,
-        });
-
-        try gen.write(u16, d);
-        try gen.write(u16, lhs.stack_index);
-        try gen.write(u16, rhs.stack_index);
-    }
-
     /// generates code for the top node in `node_stack`
-    pub fn do_node(gen: *Gen, ast: Ast) !void {
-        var node = ast.nodes.get(gen.node_stack.pop());
+    pub fn do_node(gen: *Gen) !void {
+        var node = gen.ast.nodes.get(gen.node_stack.pop());
         switch (node.symbol) {
 
             // .l = node -> var_seq
             // .r = range(data) -> initializers...
             // initializers = node index
             .var_decl => {
-                const initializers = ast.range(node.r);
+                const initializers = gen.ast.range(node.r);
                 var iter = ReverseIter(Ast.Index).init(initializers);
                 while(iter.next()) |init_node| {
                     try gen.node_stack.append(init_node);
@@ -246,10 +146,10 @@ const Gen = struct {
             // identifiers = lexeme index
             .var_seq => {
                 // add locals to map, initialize later (State.var_init)
-                const identifiers = ast.range(node.l);
+                const identifiers = gen.ast.range(node.l);
                 var iter = ReverseIter(Ast.Index).init(identifiers);
                 while(iter.next()) |lexi| {
-                    const identifier = ast.lexeme_str_lexi(lexi);
+                    const identifier = gen.ast.lexeme_str_lexi(lexi);
                     var entry = try gen.locals.getOrPut(identifier);
                     if(entry.found_existing) {
                         // TODO: error: local already exists
@@ -270,16 +170,17 @@ const Gen = struct {
             .literal_octal,
             .literal_binary,
             .literal_int => {
-                const k = try gen.getk(node, ast);
+                const k = try gen.getk(node);
                 const stack_index = gen.psudo_push(u64);
 
                 try gen.write_op(.const64, 2);
                 try gen.write(u16, stack_index);
                 try gen.write(u16, k);
 
+                const tid = try gen.type_table.add_type(gen.init_type(node).?);
+
                 try gen.operand_stack.append(.{
-                    // TODO: type system
-                    .tid = 1,
+                    .tid = tid,
                     .stack_index = stack_index,
                     .temp = true,
                 });
@@ -293,7 +194,7 @@ const Gen = struct {
             .div => {
                 try gen.node_stack.append(node.r);
                 try gen.node_stack.append(node.l);
-                try gen.state_stack.append(Gen.State.init(node.symbol).?);
+                try gen.state_stack.append(Gen.State.init_gen_binop(node.symbol).?);
                 try gen.state_stack.append(.node);
                 try gen.state_stack.append(.node);
             },
@@ -323,6 +224,153 @@ const Gen = struct {
         }
     }
 
+    ///
+    pub fn gen_binop(gen: *Gen, comptime state: Gen.State) !void {
+        const rhs = gen.operand_stack.pop();
+        const lhs = gen.operand_stack.pop();
+
+        if(rhs.tid != lhs.tid)
+            // TODO: error, expected equivilent types
+            return;
+
+        if(!try gen.type_table.numeric(rhs.tid))
+            // TODO: error, expected nemeric types
+            return;
+
+        var op: Opcode = undefined;
+        switch(state) {
+            .gen_add => switch(gen.type_table.get(rhs.tid).?.active_tag()) {
+                .int => op = .addi,
+                .float => op = .addf,
+                else => unreachable,
+            },
+            .gen_sub => switch(gen.type_table.get(rhs.tid).?) {
+                .int => op = .subi,
+                .float => op = .subf,
+                else => unreachable,
+            },
+            .gen_mul => switch(gen.type_table.get(rhs.tid).?) {
+                .int => op = .muli,
+                .float => op = .mulf,
+                else => unreachable,
+            },
+            .gen_div => switch(gen.type_table.get(rhs.tid).?) {
+                .float => op = .divf,
+                // TODO: integer division -- .int => .divi,
+                else => unreachable,
+            },
+            else => unreachable,
+        }
+
+        try gen.write_op(op, 2);
+        try gen.write_binop_args(lhs, rhs);
+    }
+
+    ///
+    pub fn psudo_push(gen: *Gen, comptime T: type) u16 {
+        gen.top += padding(gen.top, @sizeOf(T));
+        const offset = gen.top;
+        gen.top += @sizeOf(T);
+        return @intCast(u16, offset / @sizeOf(T));
+    }
+
+    ///
+    pub fn getk(gen: *Gen, node: Ast.Node) !u16 {
+        switch(node.symbol) {
+            .literal_hex,
+            .literal_octal,
+            .literal_binary,
+            .literal_int => {
+                // TODO: check if 'val' already exists
+                const val: i64 = try std.fmt.parseInt(i64, gen.ast.lexeme_str(node), 0);
+                const k = @intCast(u16, try gen.kst.push(i64, val));
+                return k;
+            },
+
+            .literal_float => {
+                // TODO: check if 'val' already exists
+                const val: f64 = try std.fmt.parseFloat(f64, gen.ast.lexeme_str(node));
+                const k = @intCast(u16, try gen.kst.push(f64, val));
+                return k;
+            },
+
+            else => return error.expected_literal_node,
+        }
+    }
+
+    /// creates a Type object from a literal node or a type_expr node
+    fn init_type(gen: *Gen, node: Ast.Node) ?Type {
+        _ = gen;
+        switch (node.symbol) {
+            .literal_float =>
+                return Type{ .float = {} },
+            .literal_hex,
+            .literal_octal,
+            .literal_binary,
+            .literal_int =>
+                return Type{ .int = {} },
+            .literal_true,
+            .literal_false =>
+                return Type{ .bool = {} },
+            .literal_nil =>
+                return Type{ .nil = {} },
+            .literal_string => unreachable,
+
+            .type_expr => unreachable,
+
+            else => return null,
+        }
+    }
+
+    /// alignment specifys the requested alignment for the instruction's payload,
+    /// padding bytes will be inserted before op to accomodate
+    pub fn write_op(this: *Gen, op: Opcode, alignment: usize) !void {
+        const pads = padding(this.ins_buffer.items.len + 1, alignment);
+        try this.ins_buffer.appendNTimes(0, pads);
+        try this.ins_buffer.append(@enumToInt(op));
+    }
+
+    /// writes T to .ins_buffer, no padding is used
+    pub fn write(this: *Gen, comptime T: type, val: T) !void {
+        try this.ins_buffer.appendSlice(std.mem.asBytes(&val));
+    }
+
+    ///
+    pub fn write_binop_args(gen: *Gen, lhs: StackEntry, rhs: StackEntry) !void {
+        var d: u16 = 0;
+        if(lhs.temp) {
+            d = lhs.stack_index;
+            gen.top = lhs.stack_index + 8;
+        }
+        else if(rhs.temp) {
+            d = rhs.stack_index;
+            gen.top = rhs.stack_index + 8;
+        }
+        else {
+            d = gen.psudo_push(u64);
+        }
+
+        try gen.operand_stack.append(.{
+            .tid = lhs.tid,
+            .stack_index = d,
+            .temp = true,
+        });
+
+        try gen.write(u16, d);
+        try gen.write(u16, lhs.stack_index);
+        try gen.write(u16, rhs.stack_index);
+    }
+
+    /// detemines number of padding bytes required to align `offset`
+    /// with `alignment`
+    fn padding(offset: usize, alignment: usize) usize
+    {
+        const mod = offset % alignment;
+        if(mod == 0) return 0
+        else return alignment - mod;
+    }
+
+    ///
     pub const State = enum {
         next_top_decl,
         node,
@@ -333,7 +381,7 @@ const Gen = struct {
         gen_mul,
         gen_div,
 
-        pub fn init(sym: Symbol) ?Gen.State {
+        pub fn init_gen_binop(sym: Symbol) ?Gen.State {
             return switch(sym) {
                 .add => .gen_add,
                 .sub => .gen_sub,
@@ -346,7 +394,7 @@ const Gen = struct {
 };
 
 const StackEntry = struct {
-    tid: u64,
+    tid: usize,
     stack_index: u16,
     temp: bool,
 };
