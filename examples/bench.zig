@@ -11,13 +11,15 @@ const ego = @import("ego");
 const dump = ego.dump.dump;
 
 const src =
-    \\
     \\  const a,b = 2 * (5+4), (3.14 * 2.0) - 1.0
-    \\
 ;
 
 pub fn main() !void
 {
+    std.debug.print("\n====================== source ======================\n\n", .{});
+    std.debug.print("{s}\n", .{src});
+    std.debug.print("\n====================== lexing ======================\n\n", .{});
+
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const ally = gpa.allocator();
 
@@ -29,14 +31,14 @@ pub fn main() !void
         std.debug.print("{s:20} : '{s}'\n", .{@tagName(lexeme.ty), lexer.string(lexeme)});
     }
 
-    std.debug.print("\n============================================\n\n", .{});
+    std.debug.print("\n===================== parsing =======================\n\n", .{});
 
     var ast = try ego.parse.parse(ally, src);
     defer ast.deinit(ally);
 
     std.debug.print("nodes : {}\n", .{ast.nodes.len});
 
-    std.debug.print("\n============================================\n\n", .{});
+    std.debug.print("\n====================== AST ======================\n\n", .{});
 
     if(ast.diagnostics.len > 0)
     {
@@ -52,13 +54,13 @@ pub fn main() !void
 
     try dump(ast);
 
-    std.debug.print("\n============================================\n\n", .{});
+    std.debug.print("\n====================== code gen ======================\n\n", .{});
 
     const code = try ego.codegen.gen_code(ally, ast);
 
-    std.debug.print("code size : {}\n", .{code.buffer.len});
+    std.debug.print("code size : {}bytes\n", .{code.buffer.len});
 
-    std.debug.print("\n============================================\n\n", .{});
+    std.debug.print("\n==================== disassembly ========================\n\n", .{});
 
     var vm = ego.Vm{};
     var stack: [256]u8 = undefined;
@@ -66,6 +68,11 @@ pub fn main() !void
     vm.stack = stack[0..];
     var instructions = ego.InstructionBuffer{ .buffer = code.buffer };
     try vm.execute(&instructions);
+
+    const out = std.io.getStdOut().writer();
+    try ego.disassemble(out, code);
+
+    std.debug.print("\n====================== result ======================\n\n", .{});
 
     std.debug.print("  = {d}\n", .{@ptrCast(*i64, @alignCast(@alignOf(*i64), &stack[0])).*});
     std.debug.print("  = {d}\n", .{@ptrCast(*f64, @alignCast(@alignOf(*i64), &stack[8])).*});
