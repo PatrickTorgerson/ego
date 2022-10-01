@@ -64,10 +64,12 @@ pub fn disassemble_ins(writer: anytype, code: CodePage, offset: usize) !usize {
                 k,
             });
 
+            const kst = code.kst[k..];
+
             // for now we print k value as int and float
             try std.fmt.format(writer, "     // {d} | {d:.4}", .{
-                const_ptr(u64, &code.kst[@intCast(usize, k * 8)]).*,
-                const_ptr(f64, &code.kst[@intCast(usize, k * 8)]).*,
+                std.mem.bytesAsValue(i64, kst[0..8]).*,
+                std.mem.bytesAsValue(f64, kst[0..8]).*,
             });
             size += 4;
         },
@@ -76,9 +78,4 @@ pub fn disassemble_ins(writer: anytype, code: CodePage, offset: usize) !usize {
     }
 
     return size;
-}
-
-/// ptr cast helper
-fn const_ptr(comptime T: type, p: *const u8) *const T {
-    return @ptrCast(*const T, @alignCast(@alignOf(T), p));
 }

@@ -17,15 +17,8 @@ pub const Vm = struct {
     stack: []u8 = undefined,
     kst: []const u8 = undefined,
 
-    /// Temporary helper for setting constants
-    pub fn setk(this: *Vm, comptime T: type, i: usize, v: T) void {
-        ptr(T, &this.kst[i * @sizeOf(T)]).* = v;
-    }
-
     /// execute ego bytecode
-    pub fn execute(this: *Vm, instructions: *InstructionBuffer) Error!void {
-
-        const base = this.stack[0..];
+    pub fn execute(vm: *Vm, instructions: *InstructionBuffer) Error!void {
 
         while (instructions.buffer.len > 0) {
             switch (instructions.read_op()) {
@@ -34,30 +27,43 @@ pub const Vm = struct {
                     const d = instructions.read(u16);
                     const k = instructions.read(u16);
 
-                    ptr(u64, &base[@intCast(usize, d * 8)]).* = const_ptr(u64, &this.kst[@intCast(usize, k * 8)]).*;
+                    vm.stack_at(u64, d).* = vm.kst_at(u64, k).*;
                 },
 
                 // -- arithmatic
-                .addi => add(.addi, base, instructions),
-                .addf => add(.addf, base, instructions),
-                .subi => sub(.subi, base, instructions),
-                .subf => sub(.subf, base, instructions),
-                .muli => mul(.muli, base, instructions),
-                .mulf => mul(.mulf, base, instructions),
-                // .divi => div(.divi, base, instructions), TODO: #2 this
-                .divf => div(.divf, base, instructions),
+                .addi => vm.add(.addi, instructions),
+                .addf => vm.add(.addf, instructions),
+                .subi => vm.sub(.subi, instructions),
+                .subf => vm.sub(.subf, instructions),
+                .muli => vm.mul(.muli, instructions),
+                .mulf => vm.mul(.mulf, instructions),
+                // .divi => divi(.divi, instructions), TODO: #2 this
+                .divf => vm.divf(.divf, instructions),
 
                 // --
 
                 .mov64 => {
                     const d = instructions.read(u16);
                     const s = instructions.read(u16);
-                    get(u64, d, base).* = get(u64, s, base).*;
+                    vm.stack_at(u64, d).* = vm.stack_at(u64, s).*;
                 },
 
                 else => unreachable,
             }
         }
+    }
+
+    // TODO: index into current stack frame
+    fn stack_at(vm: *Vm, comptime T: type, index: u16) *T {
+        const s = @sizeOf(T);
+        var at = vm.stack[index * s..];
+        return std.mem.bytesAsValue(T, @alignCast(s, at[0..s]));
+    }
+
+    fn kst_at(vm: *Vm, comptime T: type, index: u16) *const T {
+        const s = @sizeOf(T);
+        var at = vm.kst[index * s..];
+        return std.mem.bytesAsValue(T, @alignCast(s, at[0..s]));
     }
 
     /// ptr cast helper
@@ -69,42 +75,37 @@ pub const Vm = struct {
         return @ptrCast(*const T, @alignCast(@alignOf(T), p));
     }
 
-    /// gets a pointer to T at 'index'
-    fn get(comptime T: type, index: u16, base: []u8) *T {
-        return ptr(T, &base[@intCast(usize, index * @sizeOf(T))]);
-    }
-
     ///
-    fn add(comptime op: Opcode, base: []u8, instructions: *InstructionBuffer) void {
+    fn add(vm: *Vm, comptime op: Opcode, instructions: *InstructionBuffer) void {
         const T = ArithTy(op);
-        get(T, instructions.read(u16), base).* =
-            get(T, instructions.read(u16), base).* +
-            get(T, instructions.read(u16), base).*;
+        vm.stack_at(T, instructions.read(u16)).* =
+            vm.stack_at(T, instructions.read(u16)).* +
+            vm.stack_at(T, instructions.read(u16)).*;
     }
 
     ///
-    fn sub(comptime op: Opcode, base: []u8, instructions: *InstructionBuffer) void {
+    fn sub(vm: *Vm, comptime op: Opcode, instructions: *InstructionBuffer) void {
         const T = ArithTy(op);
-        get(T, instructions.read(u16), base).* =
-            get(T, instructions.read(u16), base).* -
-            get(T, instructions.read(u16), base).*;
+        vm.stack_at(T, instructions.read(u16)).* =
+            vm.stack_at(T, instructions.read(u16)).* -
+            vm.stack_at(T, instructions.read(u16)).*;
     }
 
     ///
-    fn mul(comptime op: Opcode, base: []u8, instructions: *InstructionBuffer) void {
+    fn mul(vm: *Vm, comptime op: Opcode, instructions: *InstructionBuffer) void {
         const T = ArithTy(op);
-        get(T, instructions.read(u16), base).* =
-            get(T, instructions.read(u16), base).* *
-            get(T, instructions.read(u16), base).*;
+        vm.stack_at(T, instructions.read(u16)).* =
+            vm.stack_at(T, instructions.read(u16)).* *
+            vm.stack_at(T, instructions.read(u16)).*;
     }
 
     ///
-    fn div(comptime op: Opcode, base: []u8, instructions: *InstructionBuffer) void {
+    fn divf(vm: *Vm, comptime op: Opcode, instructions: *InstructionBuffer) void {
         const T = ArithTy(op);
         if(comptime is_floating(T)) {
-            get(T, instructions.read(u16), base).* =
-                get(T, instructions.read(u16), base).* /
-                get(T, instructions.read(u16), base).*;
+            vm.stack_at(T, instructions.read(u16)).* =
+                vm.stack_at(T, instructions.read(u16)).* /
+                vm.stack_at(T, instructions.read(u16)).*;
         }
         else unreachable;
     }

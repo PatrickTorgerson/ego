@@ -10,6 +10,7 @@ const ReverseIter = @import("iterator.zig").ReverseIter;
 
 const grammar = @import("grammar.zig");
 
+// TODO: accept writer to dump to
 pub fn dump(ast: Ast) !void {
     if (ast.diagnostics.len > 0) {
         std.debug.print("Cannot dump tree, contains {} error(s)\n", .{ast.diagnostics.len});
@@ -116,8 +117,7 @@ pub fn dump(ast: Ast) !void {
                 out.inc(4);
 
                 const identifiers = ast.range(node.l);
-                var iter = ReverseIter(Ast.Index).init(identifiers);
-                while(iter.next()) |lexi| {
+                for(identifiers) |lexi| {
                     out.line();
                     out.print(ast.lexeme_str_lexi(lexi));
                 }

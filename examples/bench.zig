@@ -74,6 +74,6 @@ pub fn main() !void
 
     std.debug.print("\n====================== result ======================\n\n", .{});
 
-    std.debug.print("  = {d}\n", .{@ptrCast(*i64, @alignCast(@alignOf(*i64), &stack[0])).*});
-    std.debug.print("  = {d}\n", .{@ptrCast(*f64, @alignCast(@alignOf(*i64), &stack[8])).*});
+    std.debug.print(" a = {d}\n", .{std.mem.bytesAsValue(i64, stack[0..8]).*});
+    std.debug.print(" b = {d}\n", .{std.mem.bytesAsValue(f64, stack[8..16]).*});
 }
