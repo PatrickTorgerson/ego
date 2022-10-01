@@ -10,8 +10,8 @@ pub const Symbol = enum(i32) {
     file,
     var_decl,
     var_seq,
+    name,
     type_expr,
-
     identifier,
 
     // literals
@@ -103,7 +103,6 @@ pub const Terminal = enum(i32) {
     ky_var,
     ky_const,
     ky_func,
-    ky_method,
     ky_return,
     ky_type,
     ky_struct,
@@ -112,13 +111,12 @@ pub const Terminal = enum(i32) {
     ky_if,
     ky_else,
     ky_for,
-    ky_while,
     ky_switch,
     ky_case,
     ky_block,
     ky_discard,
     ky_import,
-    ky_module,
+    ky_namespace,
     ky_pub,
     ky_error,
     ky_catch,
@@ -154,6 +152,7 @@ pub const Terminal = enum(i32) {
     colon,
     colon_colon,
     comma,
+    period,
     question_mark,
     ampersand,
 

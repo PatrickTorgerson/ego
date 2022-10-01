@@ -64,7 +64,7 @@ pub fn disassemble_ins(writer: anytype, code: CodePage, offset: usize) !usize {
                 k,
             });
 
-            const kst = code.kst[k..];
+            const kst = code.kst[k*8..];
 
             // for now we print k value as int and float
             try std.fmt.format(writer, "     // {d} | {d:.4}", .{

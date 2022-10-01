@@ -11,7 +11,7 @@ const ego = @import("ego");
 const dump = ego.dump.dump;
 
 const src =
-    \\  const a,b = 2 * (5+4), (3.14 * 2.0) - 1.0
+    \\  const x,y = 30, x*2
 ;
 
 pub fn main() !void
@@ -75,5 +75,5 @@ pub fn main() !void
     std.debug.print("\n====================== result ======================\n\n", .{});
 
     std.debug.print(" a = {d}\n", .{std.mem.bytesAsValue(i64, stack[0..8]).*});
-    std.debug.print(" b = {d}\n", .{std.mem.bytesAsValue(f64, stack[8..16]).*});
+    std.debug.print(" b = {d}\n", .{std.mem.bytesAsValue(i64, stack[8..16]).*});
 }

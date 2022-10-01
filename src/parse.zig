@@ -202,6 +202,8 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                     .literal_nil,
                     .literal_string,
                     .lparen,
+                    .identifier,
+                    .colon_colon,
                     => {
                         try parser.state_stack.append(.expr_list_cont);
                         try parser.state_stack.append(.expression);
@@ -238,6 +240,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
             // => LBRACKET, RBRACKET, type_expr
             // => LBRACKET, LITERAL_INT, RBRACKET, type_expr
             .type_expr => {
+                // TODO: this
                 if (parser.consume(.identifier)) |_| {
                     try parser.push_node(.{
                         .symbol = .identifier,
@@ -251,6 +254,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
             // => unary, expr_cont
             // => LITERAL, expr_cont
             // => LPAREN, expression, close_paren, expr_cont
+            // =>
             .expression => {
                 try parser.state_stack.append(.expr_cont);
                 switch (parser.lexeme()) {
@@ -274,6 +278,12 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                         parser.advance();
                     },
 
+                    .colon_colon,
+                    .identifier => {
+                        // TODO: function calls, for now we asume var access
+                        try parser.state_stack.append(.name);
+                    },
+
                     .lparen => {
                         parser.advance();
 
@@ -294,7 +304,23 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
 
             // => [BINOP, expression]
             .expr_cont => switch (parser.lexeme()) {
-                .plus, .minus, .star, .slash, .percent, .plus_plus, .star_star, .equal_equal, .bang_equal, .lesser, .lesser_equal, .greater, .greater_equal, .ampersand_ampersand, .pipe_pipe, .ky_and, .ky_or => {
+                .plus,
+                .minus,
+                .star,
+                .slash,
+                .percent,
+                .plus_plus,
+                .star_star,
+                .equal_equal,
+                .bang_equal,
+                .lesser,
+                .lesser_equal,
+                .greater,
+                .greater_equal,
+                .ampersand_ampersand,
+                .pipe_pipe,
+                .ky_and,
+                .ky_or => {
                     if (prec < precedence(parser.lexeme())) {
                         try parser.push(parser.lexi); // lexeme
                         try parser.push(prec); // prev prec
@@ -308,6 +334,63 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                     }
                 },
                 else => {},
+            },
+
+            // => COLON_COLON, .var_access
+            // => .namespace_resolution, .var_resolution
+            // => .var_resolution
+            .name => {
+                // TODO: optional COLON_COLON prefix
+                _ = parser.consume(.colon_colon);
+
+                // node_count is already being used by .expr_list
+                // so we cache is here and restore it in .create_var_access_node
+                try parser.push(node_count);
+                node_count = 0;
+
+                try parser.push(parser.lexi);
+
+                try parser.state_stack.append(.create_name_node);
+                try parser.state_stack.append(.field_resolution);
+
+                if(parser.peek() == .colon_colon)
+                    try parser.state_stack.append(.namespace_resolution)
+                else
+                    try parser.push(0); // 0 namespace accessors
+
+            },
+
+            // => IDENTIFIER, {COLON_COLON, IDENTIFIER}, COLON_COLON
+            .namespace_resolution => {
+                if (parser.check(.identifier)) {
+                    if(parser.peek() == .colon_colon) {
+                        try parser.push(parser.lexi);
+                        node_count += 1;
+                        parser.advance(); // .identifier
+                        parser.advance(); // .colon_colon
+                        try parser.state_stack.append(.namespace_resolution);
+                    }
+                    else {
+                        try parser.push(node_count);
+                        node_count = 0;
+                    }
+                }
+                else try parser.diag_expected(.identifier);
+            },
+
+            // => IDENTIFIER, {PERIOD, IDENTIFIER}
+            .field_resolution => {
+                if (parser.check(.identifier)) {
+                    try parser.push(parser.lexi);
+                    node_count += 1;
+                    parser.advance();
+                    if (parser.consume(.period)) |_|
+                        try parser.state_stack.append(.field_resolution)
+                    else {
+                        try parser.push(node_count);
+                        node_count = 0;
+                    }
+                } else try parser.diag_expected(.identifier);
             },
 
             // => RPAREN
@@ -341,7 +424,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
 
             // -- node creation
 
-            // -> rhs, prec, lexeme, lhs, ...
+            // -> rhs, prec, lexeme, lhs
             .create_binop_node => {
                 const sym = Symbol.init_binop(parser.lexeme_ty[parser.at(2)]).?;
                 std.debug.print("  - {s} {s} {s}\n", .{
@@ -363,7 +446,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                 try parser.push(node);
             },
 
-            // -> identifier_lexeme..., ...
+            // -> identifier_lexeme...
             .create_var_seq_node => {
                 assert(node_count > 0);
 
@@ -383,7 +466,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                 node_count = 0;
             },
 
-            // -> expresion..., var_seq, lexeme, ...
+            // -> expresion..., var_seq, lexeme
             .create_var_decl_node => {
                 if (node_count == 0)
                     try parser.diag(.expected_expression)
@@ -405,6 +488,40 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
 
                     node_count = 0;
                 }
+            },
+
+            // -> var_count, var_identifiers..., namespace_count, namespace_identifiers..., lexeme, prev_node_count
+            .create_name_node => {
+
+                const rhs = parser.data.items.len;
+                const var_count = parser.pop();
+                try parser.data.append(gpa, var_count);
+                try parser.data.appendSlice(gpa, parser.top_slice(var_count));
+                parser.popn(var_count);
+
+                const namespace_count = parser.pop();
+                const lhs =
+                    if(namespace_count != 0) blk: {
+                        const len = parser.data.items.len;
+                        try parser.data.append(gpa, namespace_count);
+                        try parser.data.appendSlice(gpa, parser.top_slice(namespace_count));
+                        parser.popn(namespace_count);
+                        break :blk len;
+                    }
+                    else 0;
+
+                const lexi = parser.pop();
+                const prev_node_count = parser.pop();
+
+                try parser.push_node(.{
+                    .symbol = .name,
+                    .lexeme = lexi,
+                    .l = lhs,
+                    .r = rhs,
+                });
+
+                // restore previouse node_count
+                node_count = prev_node_count;
             },
 
             .eof => {
@@ -568,22 +685,29 @@ const Parser = struct {
         top_decl_line,
         top_decl_line_cont,
         top_decl_cont,
-        optional_semicolon,
         top_decl,
         var_decl,
         var_seq,
         expr_list,
         expr_list_cont,
-        optional_type_expr,
         type_expr,
         expression,
         expr_cont,
-        close_paren,
         unary,
+        name,
+        namespace_resolution,
+        field_resolution,
+
+        close_paren,
+        optional_semicolon,
+        optional_type_expr,
         expect_equal,
+
         create_binop_node,
         create_var_seq_node,
         create_var_decl_node,
+        create_name_node,
+
         eof,
     };
 };

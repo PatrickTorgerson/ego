@@ -20,7 +20,6 @@ pub const Lexeme = struct {
         .{ "var", .ky_var },
         .{ "const", .ky_const },
         .{ "func", .ky_func },
-        .{ "method", .ky_method },
         .{ "return", .ky_return },
         .{ "type", .ky_type },
         .{ "struct", .ky_struct },
@@ -29,13 +28,12 @@ pub const Lexeme = struct {
         .{ "if", .ky_if },
         .{ "else", .ky_else },
         .{ "for", .ky_for },
-        .{ "while", .ky_while },
         .{ "switch", .ky_switch },
         .{ "case", .ky_case },
         .{ "block", .ky_block },
         .{ "discard", .ky_discard },
         .{ "import", .ky_import },
-        .{ "module", .ky_module },
+        .{ "namespace", .ky_namespace },
         .{ "pub", .ky_pub },
         .{ "error", .ky_error },
         .{ "catch", .ky_catch },
@@ -77,6 +75,7 @@ pub const Lexer = struct {
         number_noquote,
         fractional,
         identifier,
+        colon,
 
         carriage_return,
         newline,
@@ -174,6 +173,16 @@ pub const Lexer = struct {
                     'a'...'z', 'A'...'Z', '_' => {
                         lex.ty = .identifier;
                         state = .identifier;
+                    },
+
+                    ':' => {
+                        state = .colon;
+                    },
+
+                    '.' => {
+                        lex.ty = .period;
+                        this.nextc();
+                        break;
                     },
 
                     '(' => {
@@ -369,6 +378,14 @@ pub const Lexer = struct {
                         lex.ty = .literal_float;
                         state = .fractional;
                     },
+                    ' ', '\n', '\r' => {
+                        lex.ty = .literal_int;
+                        break;
+                    },
+                    '0'...'9' => {
+                        lex.ty = .literal_int;
+                        state = .number;
+                    },
                     else => {
                         lex.ty = .invalid;
                         break;
@@ -403,6 +420,17 @@ pub const Lexer = struct {
                         break;
                     },
                 },
+                .colon => switch(c) {
+                    ':' => {
+                        lex.ty = .colon_colon;
+                        this.nextc();
+                        break;
+                    },
+                    else => {
+                        lex.ty = .colon;
+                        break;
+                    },
+                }
             }
         }
 

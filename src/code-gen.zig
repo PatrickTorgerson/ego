@@ -72,8 +72,10 @@ pub fn gen_code(allocator: std.mem.Allocator, ast: Ast) !CodePage {
             .node => try gen.do_node(),
 
             .next_top_decl => {
-                if(gen.node_stack.items.len > 0)
-                    try gen.state_stack.append(.node)
+                if(gen.node_stack.items.len > 0) {
+                    try gen.state_stack.append(.next_top_decl);
+                    try gen.state_stack.append(.node);
+                }
                 else break;
             },
 
@@ -160,6 +162,31 @@ const Gen = struct {
                         entry.value_ptr.* = 0;
                         try gen.uninitialized_locals.append(identifier);
                     }
+                }
+            },
+
+            // .l = range(data) -> namespace identifiers... (lexi) | unused
+            // .r = range(data) -> variable identifiers... (lexi)
+            .name => {
+                // var access
+                if(node.l != 0) {
+                    // TODO: this
+                    unreachable; // namespaces don't exist
+                }
+
+                const variables = gen.ast.range(node.r);
+
+                if(variables.len > 1) {
+                    // TODO: this
+                    unreachable; // member access doesn't exist
+                }
+
+                if(gen.locals.get(gen.ast.lexeme_str_lexi(variables[0]))) |local| {
+                    try gen.operand_stack.append( gen.operand_stack.items[local] );
+                }
+                else {
+                    // TODO: this
+                    unreachable; // error: use of undeclared variable '{}'
                 }
             },
 

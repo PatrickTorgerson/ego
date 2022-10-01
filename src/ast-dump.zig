@@ -125,6 +125,23 @@ pub fn dump(ast: Ast) !void {
                 out.dec();
             },
 
+            // .l = range(data) -> namespace identifiers... (lexi) | unused
+            // .r = range(data) -> variable identifiers... (lexi)
+            .name => {
+                std.debug.print(": ", .{});
+
+                if(node.l != 0) {
+                    const namespaces = ast.range(node.l);
+                    for(namespaces) |lexi|
+                        std.debug.print("{s}::", .{ast.lexeme_str_lexi(lexi)});
+                }
+
+                const variables = ast.range(node.r);
+                for(variables[0..variables.len-1]) |lexi|
+                    std.debug.print("{s}.", .{ast.lexeme_str_lexi(lexi)});
+                std.debug.print("{s}", .{ast.lexeme_str_lexi(variables[variables.len-1])});
+            },
+
             // .l = unused
             // .r = unused
             .identifier,
