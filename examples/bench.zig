@@ -11,7 +11,8 @@ const ego = @import("ego");
 const dump = ego.dump.dump;
 
 const src =
-    \\  const x,y = 30, x*2
+    \\  const a = 2
+    \\  const b = a*2
 ;
 
 pub fn main() !void

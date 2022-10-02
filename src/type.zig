@@ -57,6 +57,17 @@ pub const TypeTable = struct {
     }
 
     ///
+    pub fn sizeof(this: TypeTable, tid: usize) ?usize {
+        if(tid >= this.types.items.len)
+            return null;
+        switch(this.types.items[tid]) {
+            .int, .float => return 8,
+            .bool => return 1,
+            .nil => return 0,
+        }
+    }
+
+    ///
     pub fn numeric(this: TypeTable, tid: usize) !bool {
         if(tid >= this.types.items.len)
             return error.out_of_bounds;

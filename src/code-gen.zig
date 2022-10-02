@@ -10,6 +10,7 @@ const Opcode = @import("instruction.zig").Opcode;
 const Symbol = @import("grammar.zig").Symbol;
 const ReverseIter = @import("iterator.zig").ReverseIter;
 const BufferStack = @import("buffer_stack.zig").BufferStack;
+const MappedBufferStack = @import("buffer_stack.zig").MappedBufferStack;
 const Type = @import("type.zig").Type;
 const TypeTable = @import("type.zig").TypeTable;
 const State = Gen.State;
@@ -32,7 +33,7 @@ pub fn gen_code(allocator: std.mem.Allocator, ast: Ast) !CodePage {
         .type_table = &TypeTable.init(allocator),
         .ins_buffer = try std.ArrayList(u8).initCapacity(allocator, ast.nodes.len),
         .operand_stack = std.ArrayList(StackEntry).init(allocator),
-        .kst = BufferStack.init(allocator),
+        .kst = MappedBufferStack.init(allocator),
         .locals = std.StringHashMap(usize).init(allocator),
         .uninitialized_locals = std.ArrayList([]const u8).init(allocator),
         // TODO: estimate capacity for .node_stack and .state_stack
@@ -96,7 +97,7 @@ pub fn gen_code(allocator: std.mem.Allocator, ast: Ast) !CodePage {
 
     return CodePage {
         .buffer = gen.ins_buffer.toOwnedSlice(),
-        .kst = gen.kst.to_owned_slice(),
+        .kst = gen.kst.buff.to_owned_slice(),
     };
 }
 
@@ -114,7 +115,7 @@ const Gen = struct {
     // simulated runtime stack, used to determine local stack indeces
     top: usize = 0,
 
-    kst: BufferStack,
+    kst: MappedBufferStack,
 
     locals: std.StringHashMap(usize),
     uninitialized_locals: std.ArrayList([]const u8),
@@ -308,17 +309,19 @@ const Gen = struct {
             .literal_octal,
             .literal_binary,
             .literal_int => {
-                // TODO: check if 'val' already exists
                 const val: i64 = try std.fmt.parseInt(i64, gen.ast.lexeme_str(node), 0);
-                const k = @intCast(u16, try gen.kst.push(i64, val));
-                return k;
+                const tid = try gen.type_table.add_type(.{.int={}});
+                if(gen.kst.search(i64, val, tid)) |k|
+                    return k
+                else return try gen.kst.push(i64, val, tid);
             },
 
             .literal_float => {
-                // TODO: check if 'val' already exists
                 const val: f64 = try std.fmt.parseFloat(f64, gen.ast.lexeme_str(node));
-                const k = @intCast(u16, try gen.kst.push(f64, val));
-                return k;
+                const tid = try gen.type_table.add_type(.{.float={}});
+                if(gen.kst.search(f64, val, tid)) |k|
+                    return k
+                else return try gen.kst.push(f64, val, tid);
             },
 
             else => return error.expected_literal_node,
