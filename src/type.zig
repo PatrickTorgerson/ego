@@ -57,6 +57,13 @@ pub const TypeTable = struct {
     }
 
     ///
+    pub fn eql(this: TypeTable, tid: usize, ty: Type) bool {
+        if(tid >= this.types.items.len)
+            return false;
+        return this.types.items[tid].eql(ty);
+    }
+
+    ///
     pub fn sizeof(this: TypeTable, tid: usize) ?usize {
         if(tid >= this.types.items.len)
             return null;

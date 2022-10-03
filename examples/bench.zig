@@ -11,8 +11,9 @@ const ego = @import("ego");
 const dump = ego.dump.dump;
 
 const src =
-    \\  const a = 2
-    \\  const b = a*2
+    \\  const pi = 3.1415926
+    \\  const r, d = 10.0, r * 2.0
+    \\  const area = 2.0 * pi * r * r
 ;
 
 pub fn main() !void
@@ -57,11 +58,20 @@ pub fn main() !void
 
     std.debug.print("\n====================== code gen ======================\n\n", .{});
 
-    const code = try ego.codegen.gen_code(ally, ast);
+    var tytable = ego.TypeTable.init(ally);
+    defer tytable.deinit();
+
+    const code = try ego.codegen.gen_code(ally, ast, &tytable);
 
     std.debug.print("code size : {}bytes\n", .{code.buffer.len});
 
     std.debug.print("\n==================== disassembly ========================\n\n", .{});
+
+    const out = std.io.getStdOut().writer();
+    try ego.disassemble(out, code, tytable);
+
+
+    std.debug.print("\n====================== result ======================\n\n", .{});
 
     var vm = ego.Vm{};
     var stack: [256]u8 = undefined;
@@ -70,11 +80,7 @@ pub fn main() !void
     var instructions = ego.InstructionBuffer{ .buffer = code.buffer };
     try vm.execute(&instructions);
 
-    const out = std.io.getStdOut().writer();
-    try ego.disassemble(out, code);
-
-    std.debug.print("\n====================== result ======================\n\n", .{});
-
-    std.debug.print(" a = {d}\n", .{std.mem.bytesAsValue(i64, stack[0..8]).*});
-    std.debug.print(" b = {d}\n", .{std.mem.bytesAsValue(i64, stack[8..16]).*});
+    std.debug.print(" r = {d}\n", .{std.mem.bytesAsValue(f64, stack[8..16]).*});
+    std.debug.print(" d = {d}\n", .{std.mem.bytesAsValue(f64, stack[16..24]).*});
+    std.debug.print(" area = {d}\n", .{std.mem.bytesAsValue(f64, stack[24..32]).*});
 }

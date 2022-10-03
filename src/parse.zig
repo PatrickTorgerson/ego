@@ -49,6 +49,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
 
     var lexemes = std.MultiArrayList(Lexeme){};
 
+    // TODO: better estimate lexeme capacity
     try lexemes.ensureTotalCapacity(gpa, source.len / 8);
 
     var lexer = Lexer.init(source);

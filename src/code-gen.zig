@@ -18,9 +18,10 @@ const State = Gen.State;
 pub const CodePage = struct {
     buffer: []const u8,
     kst: []const u8,
+    kst_map: []const MappedBufferStack.Entry,
 };
 
-pub fn gen_code(allocator: std.mem.Allocator, ast: Ast) !CodePage {
+pub fn gen_code(allocator: std.mem.Allocator, ast: Ast, tytable: *TypeTable) !CodePage {
 
     if (ast.diagnostics.len > 0) {
         std.debug.print("Cannot gen tree, contains {} error(s)\n", .{ast.diagnostics.len});
@@ -30,7 +31,7 @@ pub fn gen_code(allocator: std.mem.Allocator, ast: Ast) !CodePage {
     var gen = Gen{
         .allocator = allocator,
         .ast = &ast,
-        .type_table = &TypeTable.init(allocator),
+        .type_table = tytable,
         .ins_buffer = try std.ArrayList(u8).initCapacity(allocator, ast.nodes.len),
         .operand_stack = std.ArrayList(StackEntry).init(allocator),
         .kst = MappedBufferStack.init(allocator),
@@ -66,7 +67,7 @@ pub fn gen_code(allocator: std.mem.Allocator, ast: Ast) !CodePage {
     // code gen
     while (true) {
         const state = gen.state_stack.pop();
-        std.debug.print("== {s: ^25} ==\n", .{@tagName(state)});
+        std.debug.print("== {s: ^20} : ", .{@tagName(state)});
 
         switch (state) {
 
@@ -82,9 +83,10 @@ pub fn gen_code(allocator: std.mem.Allocator, ast: Ast) !CodePage {
 
             .var_init => {
                 const identifier = gen.uninitialized_locals.pop();
-                if(gen.locals.get(identifier)) |*local| {
+                if(gen.locals.getPtr(identifier)) |local| {
                     local.* = gen.operand_stack.items.len - 1;
                     gen.operand_stack.items[local.*].temp = false;
+                    std.debug.print("var '{s}' at stack index '{d}'", .{identifier, gen.operand_stack.items[local.*].stack_index});
                 }
             },
 
@@ -93,11 +95,15 @@ pub fn gen_code(allocator: std.mem.Allocator, ast: Ast) !CodePage {
             .gen_mul => try gen.gen_binop(.gen_mul),
             .gen_div => try gen.gen_binop(.gen_div),
         }
+
+        std.debug.print("\n", .{});
     }
+    std.debug.print("\n", .{});
 
     return CodePage {
         .buffer = gen.ins_buffer.toOwnedSlice(),
         .kst = gen.kst.buff.to_owned_slice(),
+        .kst_map = gen.kst.map.toOwnedSlice(),
     };
 }
 
@@ -126,6 +132,7 @@ const Gen = struct {
     /// generates code for the top node in `node_stack`
     pub fn do_node(gen: *Gen) !void {
         var node = gen.ast.nodes.get(gen.node_stack.pop());
+        std.debug.print("{s}, ", .{@tagName(node.symbol)});
         switch (node.symbol) {
 
             // .l = node -> var_seq
@@ -183,6 +190,7 @@ const Gen = struct {
                 }
 
                 if(gen.locals.get(gen.ast.lexeme_str_lexi(variables[0]))) |local| {
+                    std.debug.print("read '{s}'", .{gen.ast.lexeme_str_lexi(variables[0])});
                     try gen.operand_stack.append( gen.operand_stack.items[local] );
                 }
                 else {
@@ -311,17 +319,29 @@ const Gen = struct {
             .literal_int => {
                 const val: i64 = try std.fmt.parseInt(i64, gen.ast.lexeme_str(node), 0);
                 const tid = try gen.type_table.add_type(.{.int={}});
-                if(gen.kst.search(i64, val, tid)) |k|
-                    return k
-                else return try gen.kst.push(i64, val, tid);
+
+                var k: u16 = 0;
+                if(gen.kst.search(i64, val, tid)) |index|
+                    k = index
+                else k = try gen.kst.push(i64, val, tid);
+
+                std.debug.print("k{d} = {d}", .{k, val});
+
+                return k;
             },
 
             .literal_float => {
                 const val: f64 = try std.fmt.parseFloat(f64, gen.ast.lexeme_str(node));
                 const tid = try gen.type_table.add_type(.{.float={}});
-                if(gen.kst.search(f64, val, tid)) |k|
-                    return k
-                else return try gen.kst.push(f64, val, tid);
+
+                var k: u16 = 0;
+                if(gen.kst.search(f64, val, tid)) |index|
+                    k = index
+                else k = try gen.kst.push(f64, val, tid);
+
+                std.debug.print("k{d} = {d:.4}", .{k, val});
+
+                return k;
             },
 
             else => return error.expected_literal_node,
@@ -370,11 +390,11 @@ const Gen = struct {
         var d: u16 = 0;
         if(lhs.temp) {
             d = lhs.stack_index;
-            gen.top = lhs.stack_index + 8;
+            gen.top = (lhs.stack_index * 8) + 8;
         }
         else if(rhs.temp) {
             d = rhs.stack_index;
-            gen.top = rhs.stack_index + 8;
+            gen.top = (rhs.stack_index * 8) + 8;
         }
         else {
             d = gen.psudo_push(u64);
@@ -427,4 +447,5 @@ const StackEntry = struct {
     tid: usize,
     stack_index: u16,
     temp: bool,
+    // value: ?Value
 };
