@@ -18,8 +18,8 @@ type Vec2 = struct
 fn |vec2| lensqrd() float
     return .x * .x + .y * .y
 
-fn |vec2| len()
-    return ego::sqrt(.lensqrd()) float
+fn |vec2| len() float
+    return ego::sqrt(.lensqrd())
 
 fn |&Vec2| normalize()
     const len = .len()
