@@ -9,28 +9,30 @@ Small toy interpreted scripting language written in Zig
 ## Example
 
 > NOTE : This is a proposed syntax and is subject to change.
->       Currently only a basic virtual machine is implemented
+>       Currently only basic variable declarations are being compiled
 
 ```zig
 type Vec2 = struct
-    x,y float
+    pub x,y float
 
-fn |vec2| lensqrd()
+fn |vec2| lensqrd() float
     return .x * .x + .y * .y
 
 fn |vec2| len()
-    return ego::sqrt(.lensqrd())
+    return ego::sqrt(.lensqrd()) float
 
 fn |&Vec2| normalize()
     const len = .len()
     .x /= len
     .y /= len
 
-const pos = Vec2: 1,1
-assert(pos.len() == 1.4142)
+pub fn main()
 
-pos.normalize()
-assert(pos.len() == 1)
+    const pos = Vec2: 1,1
+    ego::assert(pos.len() == 1.4142)
+
+    pos.normalize()
+    ego::assert(pos.len() == 1)
 ```
 
 ## Licence
