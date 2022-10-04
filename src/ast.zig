@@ -49,22 +49,22 @@ pub const Ast = struct {
 
             /// `expected` is populated.
             expected_lexeme,
+            unexpected_lexeme,
         };
     };
-
-//     ///
-//     pub const Range1 = struct {
-//         slice: []Node.Index,
-//     };
-//
-//     ///
-//     pub const Range2 = struct {
-//         slice: []Node.Index,
-//     };
 
     pub fn range(ast: Ast, data_offset: Index) []Index {
         const size = ast.data[data_offset];
         return ast.data[data_offset + 1 .. data_offset + size + 1];
+    }
+
+    pub fn fn_proto(ast: Ast, node: Node) FnProto {
+        std.debug.assert(node.symbol == .fn_proto);
+        const size = node.r * 2;
+        return FnProto {
+            .return_expr = ast.data[node.l],
+            .params = ast.data[node.l + 1 .. node.l + size + 1],
+        };
     }
 
     pub fn deinit(this: *Ast, gpa: std.mem.Allocator) void {
@@ -82,4 +82,11 @@ pub const Ast = struct {
         const lexeme = this.lexemes.get(lexi);
         return this.source[lexeme.start..lexeme.end];
     }
+
+    pub const FnProto = struct {
+        return_expr: Index,
+
+        // each param has two elemetns, a lexi and a type_expr node index
+        params: []Index,
+    };
 };

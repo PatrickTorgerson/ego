@@ -236,6 +236,7 @@ const Gen = struct {
             },
 
             // TODO: implement
+            .fn_proto,
             .literal_true,
             .literal_false,
             .literal_nil,

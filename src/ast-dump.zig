@@ -57,6 +57,10 @@ pub fn dump(ast: Ast) !void {
     var nodes = std.ArrayList(Ast.Index).init(std.testing.allocator);
     defer nodes.deinit();
 
+    // stack of lexis to be dumped by `try nodes.append(lexi_stack_top);`
+    var lexi_stack = std.ArrayList(Ast.Index).init(std.testing.allocator);
+    defer lexi_stack.deinit();
+
     // append top level decl nodes
     out.println(@tagName(ast.nodes.get(0).symbol));
     if (ast.nodes.get(0).l != ast.nodes.get(0).r) {
@@ -71,11 +75,28 @@ pub fn dump(ast: Ast) !void {
         }
     }
 
+    const indent = ast.nodes.len;
+    const unindent = ast.nodes.len + 1;
+    const lexi_stack_top = ast.nodes.len + 2;
+
     // dump loop
     while (nodes.items.len > 0) {
-        // dumping a out-of-bound node index implys an unindent in the tree
-        if (nodes.items[nodes.items.len - 1] >= ast.nodes.len) {
+
+        if (nodes.items[nodes.items.len - 1] == indent) {
+            out.inc(4);
+            _ = nodes.pop();
+            continue;
+        }
+
+        if (nodes.items[nodes.items.len - 1] == unindent) {
             out.dec();
+            _ = nodes.pop();
+            continue;
+        }
+
+        if (nodes.items[nodes.items.len - 1] == lexi_stack_top) {
+            const lexi = lexi_stack.pop();
+            out.println(ast.lexeme_str_lexi(lexi));
             _ = nodes.pop();
             continue;
         }
@@ -99,7 +120,7 @@ pub fn dump(ast: Ast) !void {
                 std.debug.print(": {s}", .{ast.lexeme_str(node)});
 
                 out.inc(4);
-                try nodes.append(ast.nodes.len);
+                try nodes.append(unindent);
 
                 const initializers = ast.range(node.r);
                 var iter = ReverseIter(Ast.Index).init(initializers);
@@ -142,6 +163,28 @@ pub fn dump(ast: Ast) !void {
                 std.debug.print("{s}", .{ast.lexeme_str_lexi(variables[variables.len-1])});
             },
 
+            // .l = FnProto
+            // .r = param_count
+            .fn_proto => {
+                const proto = ast.fn_proto(node);
+
+                std.debug.print(": {s}", .{ast.lexeme_str(node)});
+
+                out.inc(4);
+                try nodes.append(unindent);
+
+                try nodes.append(proto.return_expr);
+
+                var i: usize = 0;
+                while (i < proto.params.len) : (i += 2) {
+                    try lexi_stack.append(proto.params[i]);
+                    try nodes.append(unindent);
+                    try nodes.append(proto.params[i + 1]); // type_expr
+                    try nodes.append(indent);
+                    try nodes.append(lexi_stack_top);
+                }
+            },
+
             // .l = unused
             // .r = unused
             .identifier,
@@ -179,14 +222,17 @@ pub fn dump(ast: Ast) !void {
             .bool_or,
             => {
                 out.inc(4);
-                try nodes.append(ast.nodes.len);
+                try nodes.append(unindent);
 
                 try nodes.append(node.r);
                 try nodes.append(node.l);
             },
 
+            .type_expr => {
+                std.debug.print(": {s}", .{ast.lexeme_str(node)});
+            },
+
             // TODO: implement
-            .type_expr,
             .eof,
             .file => unreachable,
         }

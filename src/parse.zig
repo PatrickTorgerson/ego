@@ -107,14 +107,14 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
         std.debug.print("== {s: ^25} ==\n", .{@tagName(state)});
 
         switch (state) {
-            // => NEWLINE, top_level_decl, top_decl_cont, optional_semicolon
+            // => NEWLINE, .top_level_decl, .top_decl_cont, .optional_semicolon
             .top_decl_line => {
                 if (parser.consume(.newline)) |_| {
                     try parser.state_stack.appendSlice(&[_]State{ .optional_semicolon, .top_decl_cont, .top_decl });
                 } else try parser.diag_expected(.newline);
             },
 
-            // => [top_decl_line, top_decl_line_cont]
+            // => [.top_decl_line, .top_decl_line_cont]
             .top_decl_line_cont => {
                 if(!parser.check(.eof)) {
                     // advance past redundant newlines
@@ -127,7 +127,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                 }
             },
 
-            // => [top_level_decl, top_decl_cont]
+            // => [.top_level_decl, .top_decl_cont]
             .top_decl_cont => {
                 // TODO: what if last line of file is terminated with a semicolon
                 //       this would result in check_next() panic: index out of bounds
@@ -143,7 +143,9 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                 _ = parser.consume(.semicolon);
             },
 
-            // => [KY_PUB], var_decl
+            // => SEMICOLON
+            // => [KY_PUB], .var_decl
+            // => [KY_PUB], .fn_decl
             .top_decl => {
                 if (parser.check(.semicolon)) {
                     // empty decl
@@ -151,30 +153,83 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                 } else {
                     _ = parser.consume(.ky_pub);
                     switch (parser.lexeme()) {
-                        .ky_var, .ky_const => {
-                            try parser.state_stack.append(.var_decl);
-                        },
-                        else => {
-                            //try parser.diag(.expected_top_level_decl);
-                            try parser.state_stack.append(.expression);
-                        },
+                        .ky_var,
+                        .ky_const =>
+                            try parser.state_stack.append(.var_decl),
+                        .ky_fn =>
+                            // TODO: fn aliases
+                            // TODO: method_decl
+                            try parser.state_stack.append(.fn_decl),
+                        else => try parser.diag(.expected_top_level_decl),
                     }
                 }
             },
 
-            // => KY_VAR, var_seq, EQUAL, expr_list
-            // => KY_CONST, var_seq, EQUAL, expr_list
+            // => KY_VAR, .var_seq, EQUAL, .expr_list
+            // => KY_CONST, .var_seq, EQUAL, .expr_list
             .var_decl => {
                 try parser.push(parser.lexi); // lexeme
-
                 // skip var or const
                 _ = parser.consume(.ky_var) orelse parser.consume(.ky_const).?;
-
                 try parser.state_stack.append(.create_var_decl_node);
                 try parser.state_stack.append(.expr_list);
                 try parser.state_stack.append(.expect_equal);
                 try parser.state_stack.append(.create_var_seq_node);
                 try parser.state_stack.append(.var_seq);
+            },
+
+            // => KY_FN, .fn_proto, .anon_block
+            .fn_decl => {
+                // try parser.push(parser.lexi); // lexeme
+                _ = parser.consume(.ky_fn);
+                try parser.state_stack.append(.create_fn_decl_node);
+                try parser.state_stack.append(.anon_block);
+                try parser.state_stack.append(.fn_proto);
+            },
+
+            // -> IDENTIFIER, LPAREN, .param_list, RPAREN, .type_expr
+            .fn_proto => {
+                if(parser.consume(.identifier)) |lexi|
+                    try parser.push(lexi) // IDENTIFIER lexeme
+                else try parser.diag_expected(.identifier);
+
+                if(parser.consume(.lparen)) |_| {
+                    try parser.state_stack.append(.create_fn_proto_node);
+                    try parser.state_stack.append(.type_expr); // return type
+                    try parser.state_stack.append(.param_list); // includes RPAREN
+
+                    try parser.push(0); // marks end of params
+                }
+                else try parser.diag_expected(.lparen);
+            },
+
+            // => .var_seq, .type_expr, .param_list_cont
+            // => RPAREN
+            .param_list => {
+                if (parser.check(.identifier)) {
+                    try parser.state_stack.append(.param_list_cont);
+                    try parser.state_stack.append(.type_expr);
+                    try parser.state_stack.append(.push_node_count);
+                    try parser.state_stack.append(.var_seq);
+                }
+                else if (parser.check(.rparen)) parser.advance()
+                else try parser.diag_unexpected(parser.lexeme());
+            },
+
+            // => COMMA, .param_list
+            // => RPAREN
+            .param_list_cont => {
+                if (parser.check(.comma)) {
+                    parser.advance();
+                    try parser.state_stack.append(.param_list);
+                }
+                else if (parser.check(.rparen)) parser.advance()
+                else try parser.diag_unexpected(parser.lexeme());
+            },
+
+            // => TODO: SEMICOLON
+            .anon_block => {
+                _ = parser.consume(.semicolon) orelse try parser.diag_expected(.semicolon);
             },
 
             // => IDENTIFIER, {COMMA, IDENTIFIER}
@@ -188,7 +243,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                 } else try parser.diag_expected(.identifier);
             },
 
-            // => [expression, expr_list_cont]
+            // => [.expression, .expr_list_cont]
             .expr_list => {
                 switch (parser.lexeme()) {
                     .minus,
@@ -214,7 +269,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                 }
             },
 
-            // => [COMMA, expression, expr_list_cont]
+            // => [COMMA, .expression, .expr_list_cont]
             .expr_list_cont => {
                 if (parser.consume(.comma)) |_| {
                     try parser.state_stack.append(.expr_list_cont);
@@ -223,7 +278,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                 }
             },
 
-            // => [type_expr]
+            // => [.type_expr]
             .optional_type_expr => switch (parser.lexeme()) {
                 .question_mark,
                 .ampersand,
@@ -236,10 +291,10 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
             },
 
             // => IDENTIFIER, {COLON_COLON, IDENTIFIER}
-            // => QUESTION_MARK, type_expr
-            // => AMPERSAND, type_expr
-            // => LBRACKET, RBRACKET, type_expr
-            // => LBRACKET, LITERAL_INT, RBRACKET, type_expr
+            // => QUESTION_MARK, .type_expr
+            // => AMPERSAND, .type_expr
+            // => LBRACKET, RBRACKET, .type_expr
+            // => LBRACKET, LITERAL_INT, RBRACKET, .type_expr
             .type_expr => {
                 // TODO: this
                 if (parser.consume(.identifier)) |_| {
@@ -252,10 +307,10 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                 }
             },
 
-            // => unary, expr_cont
-            // => LITERAL, expr_cont
-            // => LPAREN, expression, close_paren, expr_cont
-            // =>
+            // => .unary, .expr_cont
+            // => LITERAL, .expr_cont
+            // => LPAREN, .expression, .close_paren, .expr_cont
+            // => TODO: .fn_call, .expr_cont
             .expression => {
                 try parser.state_stack.append(.expr_cont);
                 switch (parser.lexeme()) {
@@ -303,7 +358,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                 }
             },
 
-            // => [BINOP, expression]
+            // => [BINOP, .expression]
             .expr_cont => switch (parser.lexeme()) {
                 .plus,
                 .minus,
@@ -398,7 +453,6 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
             .close_paren => {
                 if (parser.consume(.rparen)) |_| {
                     prec = parser.at(1); // restore precedence of enclosing expression
-
                     // move result node pop precedence
                     parser.set(1, parser.at(0));
                     _ = parser.pop();
@@ -421,6 +475,12 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
             // => EQUAL
             .expect_equal => {
                 if (parser.consume(.equal)) |_| {} else try parser.diag_expected(.equal);
+            },
+
+            // =>
+            .push_node_count => {
+                try parser.push(node_count);
+                node_count = 0;
             },
 
             // -- node creation
@@ -525,6 +585,35 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                 node_count = prev_node_count;
             },
 
+            // -> return_expr, [type_expr, count, identifier_lexeme...], 0, lexi
+            .create_fn_proto_node => {
+
+                const lhs = parser.data.items.len;
+                try parser.data.append(gpa, parser.pop()); // return_expr
+                var param_count: usize = 0;
+                var top = parser.pop();
+                while(top != 0) : (top = parser.pop()) {
+                    const type_expr = top;
+                    var count = parser.pop();
+                    while (count > 0) : (count -= 1) {
+                        try parser.data.append(gpa, parser.pop());
+                        try parser.data.append(gpa, type_expr);
+                        param_count += 1;
+                    }
+                }
+
+                const lexi = parser.pop();
+
+                try parser.push_node(.{
+                    .symbol = .fn_proto,
+                    .lexeme = lexi,
+                    .l = lhs,
+                    .r = param_count,
+                });
+            },
+
+            .create_fn_decl_node => {},
+
             .eof => {
                 if (parser.lexeme() != .eof)
                     try parser.diag_expected(.eof);
@@ -605,11 +694,10 @@ const Parser = struct {
         return this.lexeme_ty[this.lexi + 1] == terminal;
     }
 
-    /// return teriminal if lexeme is of type 'terminal', else null
-    /// TODO: return index intead?
-    pub fn consume(this: *Parser, terminal: Terminal) ?Terminal {
+    /// if lexeme is of type 'terminal', return lexi, and advance
+    pub fn consume(this: *Parser, terminal: Terminal) ?usize {
         if (this.check(terminal)) {
-            const t = this.lexeme_ty[this.lexi];
+            const t = this.lexi;
             this.advance();
             return t;
         } else return null;
@@ -668,6 +756,12 @@ const Parser = struct {
         try this.diag_msg(.{ .tag = .expected_lexeme, .lexeme = this.lexi, .expected = expected });
     }
 
+    /// log enexpected symbol diagnostic
+    pub fn diag_unexpected(this: *Parser, unexpected: Terminal) error{OutOfMemory}!void {
+        @setCold(true);
+        try this.diag_msg(.{ .tag = .unexpected_lexeme, .lexeme = this.lexi, .expected = unexpected });
+    }
+
     /// log diagnostic
     pub fn diag(this: *Parser, tag: Ast.Diagnostic.Tag) error{OutOfMemory}!void {
         @setCold(true);
@@ -687,6 +781,11 @@ const Parser = struct {
         top_decl_line_cont,
         top_decl_cont,
         top_decl,
+        fn_decl,
+        fn_proto,
+        anon_block,
+        param_list,
+        param_list_cont,
         var_decl,
         var_seq,
         expr_list,
@@ -703,11 +802,14 @@ const Parser = struct {
         optional_semicolon,
         optional_type_expr,
         expect_equal,
+        push_node_count,
 
         create_binop_node,
         create_var_seq_node,
         create_var_decl_node,
         create_name_node,
+        create_fn_proto_node,
+        create_fn_decl_node,
 
         eof,
     };

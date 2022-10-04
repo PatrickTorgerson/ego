@@ -11,9 +11,7 @@ const ego = @import("ego");
 const dump = ego.dump.dump;
 
 const src =
-    \\  const pi = 3.1415926
-    \\  const r, d = 10.0, r * 2.0
-    \\  const area = 2.0 * pi * r * r
+    \\  fn this_is_a_function(a,b,c int, x,y,z float) int;
 ;
 
 pub fn main() !void

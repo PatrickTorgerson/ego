@@ -9,6 +9,7 @@
 pub const Symbol = enum(i32) {
     file,
     var_decl,
+    fn_proto,
     var_seq,
     name,
     type_expr,
@@ -102,7 +103,7 @@ pub const Terminal = enum(i32) {
 
     ky_var,
     ky_const,
-    ky_func,
+    ky_fn,
     ky_return,
     ky_type,
     ky_struct,

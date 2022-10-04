@@ -19,7 +19,7 @@ pub const Lexeme = struct {
     pub const keywords = std.ComptimeStringMap(Terminal, .{
         .{ "var", .ky_var },
         .{ "const", .ky_const },
-        .{ "func", .ky_func },
+        .{ "fn", .ky_fn },
         .{ "return", .ky_return },
         .{ "type", .ky_type },
         .{ "struct", .ky_struct },
@@ -468,11 +468,11 @@ test "lexer" {
     try std.testing.expectEqual(Terminal.star, lxr.next().ty);
     try std.testing.expectEqual(Terminal.literal_float, lxr.next().ty);
 
-    lxr = Lexer.init("func fn() bool\n    var n = true\n    return false\nconst pi = 3.14");
+    lxr = Lexer.init("fn fn() bool\n    var n = true\n    return false\nconst pi = 3.14");
     // first lexeme is always indent
     try std.testing.expectEqual(Terminal.indent, lxr.next().ty);
     try std.testing.expectEqual(Terminal.newline, lxr.next().ty);
-    try std.testing.expectEqual(Terminal.ky_func, lxr.next().ty);
+    try std.testing.expectEqual(Terminal.ky_fn, lxr.next().ty);
     try std.testing.expectEqual(Terminal.identifier, lxr.next().ty);
     try std.testing.expectEqual(Terminal.lparen, lxr.next().ty);
     try std.testing.expectEqual(Terminal.rparen, lxr.next().ty);
