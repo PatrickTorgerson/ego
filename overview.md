@@ -14,8 +14,7 @@ errors will be checked and reported at runtime.
 - [variables](#variables)
 - [references](#references)
 - [optionals](#optionals)
-- [numeric literals](#numericliterals)
-- [string literals](#stringliterals)
+- [literals](#literals)
 - [arrays](#arrays)
 - [lists](#lists)
 - [maps](#maps)
@@ -39,33 +38,25 @@ errors will be checked and reported at runtime.
 
 ## variables
 
-Variables are declare with the `var` keyword. The type of a variable will be constrained to the type it was
-initialized with. Optionally you can specify a type annotation after the variable name.
+Variables are declared with `var` or `const`. The type of a variable infered.
 
 ```go
 var hello = "world" // `hello` is constrained to `string`
-var hello2 any = "Earth" // `hello2` is unconstrained
-var twice int = true // ERR expected `int`, found `bool`
+hello = 4 // error: expected string
 
-// unconstrained variables can be reassigned to any type
-hello2 = 32
-hello2 = false
-hello2 = 3.1415926
+const twelve = 12
+twelve = 69 // error: cannot asign to constant
 ```
 
 You can asign to muliple variables at once
 
 ```go
-var x,y,z = 1,2,3
+var x,y,z = 1, 2, "a string"
 
 // a,b, and c are all int's initialized to 0
 // if a variable declaration statement has exactly one initializer
 // it will be used to initialze all variable being declared
 var a,b,c = 0
-var a int, b bool = false // ERR cannot initialize int with bool
-
-// type annotations can apply to multiple variabe names
-var d,e int, name string = 4,8,"Patrick"
 
 // if a variable declaration statement has more than one initializer
 // there must be exactly one initializer per variable being declared
@@ -91,21 +82,16 @@ ego also supports several builtin container types:
 - `list`: dynamically sized array
 - `map`: dynamically sized table of key value pairs
 
-Constants can be declared with the `const` keyword. Constants are always statically typed and cannot
-be re-asigned.
-
-```go
-const pi = 3.14159265358927 // type is infered as float
-const e any = 2.71828 // ERR constants must have concrete type
-
-pi = 7 // ERR cannot asign to constant `pi`
-```
-
 <a name="references"></a>
 
 ## references
 
 > TODO
+
+```go
+var a = 1
+var r = &a
+```
 
 <a name="optionals"></a>
 
@@ -113,31 +99,57 @@ pi = 7 // ERR cannot asign to constant `pi`
 
 > TODO
 
-<a name="numericliterals"></a>
-
-## numeric literals
-
-> TODO
-
-```rust
-10
-10.11
-0b00
-0x00
-0o00
-100'000
-```
-
-<a name="stringliterals"></a>
-
-## string literals
-
-> TODO
-
-utf8
+optional types can be asigned nil
 
 ```go
-var s = "hello string"
+var a = ?int: 10
+var a = ?10 // infered optional int
+a = nil
+
+// special if that can unwrap optionals
+if a |val|
+    assert(val == 10)
+else
+    assert(val == nil)
+
+func get_value() ?int
+    if exists : return 12
+    else: return nil
+```
+
+<a name="literals"></a>
+
+## literals
+
+Integer literals
+```rust
+-10      // decimal
+-0b00    // binary int
+-0x00    // hex int
+-0o00    // octal int
+```
+
+Floating point literals
+```rust
+-3.1415
+1.1234e24
+1.0e-10
+```
+
+Numeric literals may contain apostrophies
+```rust
+1'000
+100'000'000.75
+```
+
+Typed literals take the form a type expression followed by a block of initializers
+```go
+const pi = float: 3.1415926
+const pos = vec2: 0,0
+
+const author = Person
+    .name = "patrick"
+    .birth_year = 1997
 ```
 
 <a name="arrays"></a>
@@ -147,7 +159,37 @@ var s = "hello string"
 > TODO
 
 ```go
-var a = [1,2,3,4,5,6]
+
+// array with constant length (stored on stack)
+var a = [100]int: 1, 2, 3, 0...
+a = [100]int: 1...
+a = [50]int: 2... // error: expected [100]int found [50]int
+
+// array with constant length (stored on heap)
+var a = &[69]string: ""...
+
+// array with runtime length (stored on heap)
+var buffer = [_]int: _
+buffer = [100]int: 0... // ok
+buffer = [50]int: 0... // ok
+
+// runtime size, initially 20
+var data = [_]int: 0 ** 20
+
+var siblings = [_]Person
+    : "Cody", 1995
+    : "Patrick", 1997
+    : "Madelyn", 1998
+    : "Sarah", 2002
+
+
+// resize
+var new = [300]int: _
+const len = ego::min(a.len, new.len)
+for i in ego::range(len)
+    b[i] = a[i]
+a = new
+
 ```
 
 <a name="lists"></a>
@@ -159,9 +201,12 @@ var a = [1,2,3,4,5,6]
 ```go
 var l = list(int): 1,2,3,4,5
 l.append(77)
-for i,v in l : l[i] = v * 2
+
+for v,i in l
+    l[i] = v * 2
+
 var back = l.pop()
-assert back == 154
+assert(back == 154)
 ```
 
 <a name="maps"></a>
@@ -171,8 +216,8 @@ assert back == 154
 > TODO
 
 ```go
-var m = map(string,any)
-    "name" =  "Mayday Monday"
+const m = map(string,any)
+    "name"  =  "Mayday Monday"
     "month" = 5
     "day"   = 26
     "first" = 1997
@@ -194,16 +239,18 @@ for k,v in m
 > TODO
 
 ```go
-if true
-    print "statements in a block are indented"
-        print ":(" // ERR unexpected indent
-
-if true : print "colons start a single-line block that end at the next newline"
-
 block // anonymous blocks
     var a = 12
     print "a = {a}"
 print "a = {a}" // ERR variable `a` is out of scope
+
+block b // named block
+    // ...
+    if done: break b
+    /// ...
+
+// use a colon for singl-line blocks
+block: print "why is this a block?"
 ```
 
 <a name="controlflow_if"></a>
@@ -228,7 +275,7 @@ else
 > TODO
 
 ```go
-var i = get_value()
+const i = get_value()
 
 switch i
     case 0 : print "i == 0"
@@ -258,9 +305,12 @@ for condition; continuation_expr
     print "true"
 
 // iterate over a sequence
-var array = [1,2,3,4,5]
-for i in array
-    print "iteration {i}"
+var array = [_]int: 1,2,3,4,5
+for val in array
+    print "iteration {val}"
+
+for val,i in array
+    print "array[{i}] = {val}"
 ```
 
 <a name="controlflow_func"></a>
@@ -269,9 +319,20 @@ for i in array
 
 > TODO
 
+function parameters are immutable
+
 ```go
 func name(param param_type) return_type
     return value
+
+// use references to mutate calling code's data
+func write_12(dest &int) void
+    dest = 12
+
+// use ':' for single line block
+// return type can be infered
+// params can be grouped by type
+func add(a,b int) : return a + b
 ```
 
 <a name="controlflow_end"></a>
@@ -356,22 +417,15 @@ type optional_int = nil | int
 Like a value set but specify a range of values.
 
 ```go
-type month = 1..12 int
-type uint = 0..limits.max(int)
-type ufloat = 0.0..float.inf
+type month = 1..12
+type uint = 0..ego::max_value(int)
+type ascii = 0..127
 
 type digit = '0'..'9'
 type lower = 'a'..'z'
 type upper = 'A'..'Z'
 type alpha = lower | upper
 type alphanumeric = alpha | digit
-```
-
-All these concepts can be mixed in a single type
-
-```go
-type alphanumeric = '0'..'9' | 'a'..'z' | 'A'..'Z'
-type better_int = int | "NaN" | "INF" | "-INF"
 ```
 
 <a name="usertypes_struct"></a>
@@ -389,29 +443,29 @@ type person = struct
     alive bool = true // optional default initializer
 ```
 
-Struct values can be created with a struct initializer. Specify the name of the struct, then a block of field initilizers
+Struct values can be created with a struct literal. Specify the name of the struct, then a block of field initilizers
 
 ```go
 // all fields must be initialized
 // fields with defualt initializers can be omitted
 var p = person
     .name = "Patrick"
-    .age = 24
+    .age = 25
     .height = 173
 
-// named designations are optional
+// name designations are optional
 // initializers are assigned to fields in order of declaration
 var p = person
     "patrick"
-    24
+    25
     173
 
 // use commas to declare initializers on the same line
 var p = person
-    "patrick", 24, 173
+    "patrick", 25, 173
 
 // use single line block
-var p = person: "patrick", 24, 173
+var p = person: "patrick", 25, 173
 ```
 
 Standard member access syntax
@@ -422,7 +476,7 @@ p.name = "Horatio Slim"
 print "{p.name}" // Horatio Slim
 ```
 
-Structs can be destructured into tuples,
+Structs can be destructured,
 and tuples can be structured into structs
 
 ```go
@@ -443,15 +497,16 @@ An interface defines a type by the [methods](#methode) it must implement. They a
 followed by a block of [method](#methode) signitures.
 
 ```go
-type serial = interface
-    method serialize() string
-    method& deserialize(string) &this
-    func deserialize(string) this
+type Serial = interface
+    serialize() string
+    deserialize(string) &.type
 
     // maybe C++20 style requires expressions?
-    // requires(t this) : t == t.deserialize(t.serialize())
+    // requires(t .type) : t == t.deserialize(t.serialize())
 
-method file::write_value(value serial)
+    // maybe default implementations?
+
+fn |file| write_value(value Serial)
     .write_string(value.serialize())
 ```
 
@@ -459,18 +514,22 @@ To have a type support an interface simply implement the necessary [methods](#me
 If you want to ensure a particular interface is implemented on a given type you can use the `is` operator.
 
 ```go
-method person::serialize() string
+fn |person| serialize() string
     return fmt "person: .name='{.name}', .age={.age}, .height={.height}, .alive={.alive};"
 
-method& person::deserialize(str string) &person
+fn |&person| deserialize(str string) &person
     this = scan str "person: .name='{:s}', .age={:d}, .height={:d}, .alive={:b};"
     return this
 
-func person::deserialize(str string) person
-    var new_person = person: "",0,0
-    return new_person.deserialize(str)
-
 assert(person is serial)
+```
+
+You can also require another interface be implemented
+
+```go
+type List = interface
+    interface Serial
+    size() int
 ```
 
 <a name="usertypes_enum"></a>
@@ -482,11 +541,11 @@ assert(person is serial)
 An enumeration is an enumeration. enumeration.
 
 ```go
-type direction = enum
+type Direction = enum
     north, south
     east, west
 
-var dir = direction.north
+var dir = Direction.north
 ```
 
 <a name="namespacing"></a>
@@ -505,13 +564,15 @@ func math::square(n numeric) numeric : return n*n
 
 ## methods
 
-Methods are functions that can be called on a value with a period. A method declaration must
-be namespaced to the type it's called on. A reference to the
+ego does not have classes. However, you can define methods on types.
+A method is a function with a special receiver type.
+The receiver appears between the func keyword and the method name
+these functions can be called on a value with a period. A reference to the
 value the method is being called on can be obtained with the `this` keyword. If the value
 is of struct type, member access can can have the `this` keyword omited. `this.age == .age`
 
 ```go
-method person::output()
+func |person| output()
     if .alive
         print "person: {.name}, {.age} years, {.height}cm"
     else
@@ -521,15 +582,202 @@ p.output() // person: Wanda, 500 years, 35cm
 (person: "Bob",0,0,false).output() // RIP Bob
 
 // 'this' reference is immutable by defualt
-method person::happy_birthday()
+func |person| happy_birthday()
     .age += 1 // ERR connot assign to member of immutable reference `this`
 
 // use an ampersand for mutable this
-method& person::happy_birthday()
+func |&person| happy_birthday()
     .age += 1 // OK `this` is mutable
 
-method int::squared() int
+func |int| squared()
     return this * this
 
+func |[]int| sum()
+    var v = 0
+    for v in this
+        s += v
+    return v
+
 const sqr = 5.squared() // 25
+const sum = [1,2,3,4,5,6].sum()
+```
+
+
+# playin
+
+```go
+
+import math
+pub import math
+
+using import math
+pub using import math
+
+namespace m = import math
+pub namespace m = import math
+
+import math::BigInteger
+
+import gui/components/button::Button
+
+type Buffer = import buffer::Buffer
+fn init = import buffer::init
+
+fn assert = ego::assert
+
+namespace m
+    namespace m = import math
+
+var path = ego::path: resource/image/buddy.png
+
+```
+
+```rust
+
+// integer division
+const i = 41
+
+i = i / 2 // error: expected int found float (integer division results in float)
+i = round(i/2)
+i = floor(i/2)
+i = ceil(i/2)
+i = trunc(i/2)
+
+const f = ego::pi
+
+f = float(i)
+
+type Cosa = struct
+    age &int
+
+var age = 10
+var c = &Cosa: &age
+var a = &c.age // redundant &&age == &age
+
+
+
+pub type Buffer = (import buffer.ego)::Buffer
+
+pub type Vec2 = struct
+    x,y float
+    pub fn init_polar(angle,magnitude float)
+        var self = Vec2:
+            .x = ego::cos(angle)
+            .y = ego::sin(angle)
+        return ::mul(self, magnitude)
+    pub fn add(l,r Vec2) Vec2
+        return Vec2
+            .x = l.x + r.x
+            .y = l.y + r.y
+    pub fn mul(v Vec2, s numeric) Vec2
+        return Vec2
+            .x = v.x * s
+            .y = v.y * s
+    pub fn |Vec2| length()
+        return ego::sqrt(.x * .x + .y * .y)
+    pub fn |Vec2| mul(s numeric)
+        this = ::mul(this, s)
+end struct Vec2
+
+const polar = Vec2::init_polar(
+    .angle = ego::pi * 2.0
+    .magnitude = 100.0
+)
+
+const a = Vec2: default
+const b = Vec2: 10,11
+const c = Vec2::add(a,b)
+
+ego::assert(c.x == 13 and c.y == 15)
+
+type Geometry = interface
+    interface Entity
+    area() float
+    perim() float
+
+type Rect = struct
+    width, height float
+
+fn |Rect| area() float
+    return .width * .height
+
+fn |Rect| perim() float
+    return 2*.width + 2*.height
+
+type Circle = struct
+    radius float
+
+fn |Circle| area() float
+    return ego::pi * .radius * .radius
+
+fn |Circle| perim() float
+    return 2 * ego::pi * .radius
+
+fn measure(g Geometry)
+    print "{ego::type_name(g.type)}:\n"
+    print "  {g.area()}\n"
+    print "  {g.perim()}\n"
+
+fn main()
+    const rect = Rect: 3, 4
+    const circle = Circle: 5
+
+    const geo = Geometry: Rect: 10,10
+
+    measure(rect);
+    measure(circle);
+    measure(geo);
+
+type List = struct(T type)
+    type This = .type
+
+    data []mut T
+    capacity usize
+
+    This()
+        return This: .data = _, .capacity = 0
+    This(capacity usize)
+        return This: .data = &[capacity]T: _, .capacity = capacity
+    This(contents []T)
+        var buffer = &[contents.len]T: contents
+        return This: .data = buffer[:], .capacity = contents.len
+
+    pub fn |This| push(val T)
+        if .data.len + 1 > .capacity
+            .grow_at_least(1)
+        .data = .data[0 .. .data.len + 1]
+        .data[-1] = val
+
+    pub fn |This| pop() T
+        const back = .data[-1]
+        .data = .data[:-1]
+        return back
+
+    fn |This| grow_at_least(amt usize)
+        var new_buffer = &[.capacity + amt]T: .data, _
+        .data = new_buffer[:.capacity]
+        .capacity += amt
+
+pub type List = struct
+    type T = any
+
+    data []mut T
+    buffer []mut T
+
+
+    init(contents []any)
+        .capacity = contents.len
+        .data = &[_]mut any: contents
+        .T = contents.child_type
+
+    pub fn |List| push(val any)
+        if val.type != data.type.child_type
+            error "Expected val type `{data.type.child_type}` found `{val.type}`"
+        if .data.len + 1 > .capacity
+            .grow_capacity(.capacity + 1)
+        .data = .data[0:+1]
+        .data[-1] = val
+
+var list = List: [_]i32: 1,2,3,4,5,6,7,8
+
 ```

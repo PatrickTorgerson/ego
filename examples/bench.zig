@@ -11,7 +11,8 @@ const ego = @import("ego");
 const dump = ego.dump.dump;
 
 const src =
-    \\  fn this_is_a_function(a,b,c int, x,y,z float) int;
+    \\  pub fn main() void
+    \\      var a,b,c = 1,2,3
 ;
 
 pub fn main() !void

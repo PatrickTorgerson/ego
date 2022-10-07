@@ -104,64 +104,48 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
     // main parsing loop
     while (true) {
         const state = parser.pop_state();
-        std.debug.print("== {s: ^25} ==\n", .{@tagName(state)});
+        std.debug.print("== {s: ^20} : '{s}'\n", .{@tagName(state), source[ parser.lexeme_starts[parser.lexi] .. parser.lexeme_ends[parser.lexi] ]});
 
         switch (state) {
-            // => NEWLINE, .top_level_decl, .top_decl_cont, .optional_semicolon
+            // => .top_decl, .top_decl_cont, .line_end,
             .top_decl_line => {
-                if (parser.consume(.newline)) |_| {
-                    try parser.state_stack.appendSlice(&[_]State{ .optional_semicolon, .top_decl_cont, .top_decl });
-                } else try parser.diag_expected(.newline);
+                try parser.state_stack.append(.line_end);
+                try parser.state_stack.append(.top_decl_cont);
+                try parser.state_stack.append(.top_decl);
             },
 
             // => [.top_decl_line, .top_decl_line_cont]
             .top_decl_line_cont => {
+                // advance past redundant newlines
+                while (parser.check_next(.newline)) parser.advance();
                 if(!parser.check(.eof)) {
-                    // advance past redundant newlines
-                    while (parser.check_next(.newline)) parser.advance();
-
-                    if (!parser.check_next(.eof)) {
-                        try parser.state_stack.append(.top_decl_line_cont);
-                        try parser.state_stack.append(.top_decl_line);
-                    } else parser.advance();
+                    try parser.state_stack.append(.top_decl_line_cont);
+                    try parser.state_stack.append(.top_decl_line);
                 }
             },
 
-            // => [.top_level_decl, .top_decl_cont]
+            // => [.top_decl, .top_decl_cont]
             .top_decl_cont => {
-                // TODO: what if last line of file is terminated with a semicolon
-                //       this would result in check_next() panic: index out of bounds
-                if (parser.check(.semicolon) and !parser.check_next(.newline)) {
+                if (parser.check(.semicolon) and !parser.check_next(.newline) and !parser.check_next(.eof)) {
                     parser.advance(); // semicolon
                     try parser.state_stack.append(.top_decl_cont);
                     try parser.state_stack.append(.top_decl);
                 }
             },
 
-            // => [SEMICOLON]
-            .optional_semicolon => {
-                _ = parser.consume(.semicolon);
-            },
-
-            // => SEMICOLON
             // => [KY_PUB], .var_decl
             // => [KY_PUB], .fn_decl
             .top_decl => {
-                if (parser.check(.semicolon)) {
-                    // empty decl
-                    parser.advance();
-                } else {
-                    _ = parser.consume(.ky_pub);
-                    switch (parser.lexeme()) {
-                        .ky_var,
-                        .ky_const =>
-                            try parser.state_stack.append(.var_decl),
-                        .ky_fn =>
-                            // TODO: fn aliases
-                            // TODO: method_decl
-                            try parser.state_stack.append(.fn_decl),
-                        else => try parser.diag(.expected_top_level_decl),
-                    }
+                _ = parser.consume(.ky_pub);
+                switch (parser.lexeme()) {
+                    .ky_var,
+                    .ky_const =>
+                        try parser.state_stack.append(.var_decl),
+                    .ky_fn =>
+                        // TODO: fn aliases
+                        // TODO: method_decl
+                        try parser.state_stack.append(.fn_decl),
+                    else => try parser.diag(.expected_top_level_decl),
                 }
             },
 
@@ -227,9 +211,59 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                 else try parser.diag_unexpected(parser.lexeme());
             },
 
-            // => TODO: SEMICOLON
+            // => INDENT, .statement_line, .statement_line_cont, .end_block
+            // => // TODO: COLON, .statement_line, NEWLINE
             .anon_block => {
-                _ = parser.consume(.semicolon) orelse try parser.diag_expected(.semicolon);
+                // _ = parser.consume(.semicolon) orelse try parser.diag_expected(.semicolon);
+                switch(parser.lexeme()) {
+                    .indent => {
+                        try parser.indent_stack.append(parser.lexeme_width());
+                        parser.advance();
+
+                        try parser.state_stack.append(.block_end);
+                        try parser.state_stack.append(.statement_line_cont);
+                        try parser.state_stack.append(.statement_line);
+                    },
+                    .colon => { unreachable; },
+                    else => try parser.diag(.expected_block),
+                }
+            },
+
+            // => .statement, .statement_cont, .line_end
+            .statement_line => {
+                try parser.state_stack.append(.line_end);
+                try parser.state_stack.append(.statement_cont);
+                try parser.state_stack.append(.statement);
+            },
+
+            // => [.statement_line, .statement_line_cont]
+            .statement_line_cont => {
+                // advance past redundant newlines
+                while (parser.check_next(.newline)) parser.advance();
+                if (!parser.check(.unindent)) {
+                    try parser.state_stack.append(.statement_line_cont);
+                    try parser.state_stack.append(.statement_line);
+                }
+            },
+
+            // => .var_decl
+            // => TODO:
+            .statement => {
+                switch (parser.lexeme()) {
+                    .ky_var,
+                    .ky_const =>
+                        try parser.state_stack.append(.var_decl),
+                    else => try parser.diag(.expected_statement),
+                }
+            },
+
+            // => [.statement, .statement_cont]
+            .statement_cont => {
+                if (parser.check(.semicolon) and !parser.check_next(.newline) and !parser.check_next(.eof) and !parser.check_next(.unindent)) {
+                    parser.advance(); // semicolon
+                    try parser.state_stack.append(.statement_cont);
+                    try parser.state_stack.append(.statement);
+                }
             },
 
             // => IDENTIFIER, {COMMA, IDENTIFIER}
@@ -477,6 +511,30 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                 if (parser.consume(.equal)) |_| {} else try parser.diag_expected(.equal);
             },
 
+            // => [SEMICOLON], NEWLINE
+            // => [SEMICOLON], INDENT
+            // => [SEMICOLON], UNINDENT
+            // => [SEMICOLON], EOF
+            .line_end => {
+                _ = parser.consume(.semicolon);
+                switch(parser.lexeme()) {
+                    .newline, .indent, .unindent, .eof => {},
+                    else => try parser.diag_expected(.newline),
+                }
+            },
+
+            // => UNINDENT
+            .block_end => {
+                if(parser.check(.unindent)) {
+                    const indent = parser.lexeme_width();
+                    _ = parser.indent_stack.pop();
+                    if(indent == parser.indent_stack.items[parser.indent_stack.items.len - 1]) {
+                        parser.advance();
+                    }
+                }
+                else try parser.diag_expected(.unindent);
+            },
+
             // =>
             .push_node_count => {
                 try parser.push(node_count);
@@ -612,7 +670,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                 });
             },
 
-            .create_fn_decl_node => {},
+            .create_fn_decl_node => { unreachable; },
 
             .eof => {
                 if (parser.lexeme() != .eof)
@@ -663,7 +721,7 @@ const Parser = struct {
     pub fn initial_indent(this: *Parser) void {
         assert(this.indent_stack.items.len == 0);
         assert(this.lexeme_ty[this.lexi] == .indent);
-        const indent = this.lexeme_ends[this.lexi] - this.lexeme_starts[this.lexi];
+        const indent = this.lexeme_width();
         assert(indent >= 0);
         this.indent_stack.appendAssumeCapacity(indent);
         this.advance();
@@ -672,6 +730,11 @@ const Parser = struct {
     /// returns current lexeme type
     pub fn lexeme(this: Parser) Terminal {
         return this.lexeme_ty[this.lexi];
+    }
+
+    /// returns current lexeme's width
+    pub fn lexeme_width(this: Parser) usize {
+        return this.lexeme_ends[this.lexi] - this.lexeme_starts[this.lexi];
     }
 
     /// returns next lexeme's type
@@ -691,6 +754,7 @@ const Parser = struct {
 
     /// verifies next lexeme is of type 'terminal'
     pub fn check_next(this: Parser, terminal: Terminal) bool {
+        if(this.lexi >= this.lexeme_ty.len) return false;
         return this.lexeme_ty[this.lexi + 1] == terminal;
     }
 
@@ -783,9 +847,13 @@ const Parser = struct {
         top_decl,
         fn_decl,
         fn_proto,
-        anon_block,
         param_list,
         param_list_cont,
+        anon_block,
+        statement_line,
+        statement_line_cont,
+        statement_cont,
+        statement,
         var_decl,
         var_seq,
         expr_list,
@@ -799,7 +867,8 @@ const Parser = struct {
         field_resolution,
 
         close_paren,
-        optional_semicolon,
+        line_end,
+        block_end,
         optional_type_expr,
         expect_equal,
         push_node_count,

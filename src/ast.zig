@@ -44,6 +44,8 @@ pub const Ast = struct {
         pub const Tag = enum {
             chained_comparison_operators,
             expected_top_level_decl,
+            expected_statement,
+            expected_block,
             expected_expression,
             invalid_token,
 

@@ -120,7 +120,7 @@ pub const Lexer = struct {
             lex.end = this.cursor;
             this.prev_indent = lex.end;
 
-            this.pending_newline = 0;
+            this.pending_newline = npos;
 
             return lex;
         }
@@ -270,7 +270,7 @@ pub const Lexer = struct {
                         } else if (new_indent < this.prev_indent) {
                             lex.ty = .unindent;
                             this.prev_indent = new_indent;
-                            this.pending_newline = lex.start;
+                            // this.pending_newline = lex.start;
                             break;
                         }
                     },
@@ -459,7 +459,7 @@ test "lexer" {
     var lxr = Lexer.init("(5+5)*2.0");
     // first lexeme is always indent
     try std.testing.expectEqual(Terminal.indent, lxr.next().ty);
-    try std.testing.expectEqual(Terminal.newline, lxr.next().ty);
+    //try std.testing.expectEqual(Terminal.newline, lxr.next().ty);
     try std.testing.expectEqual(Terminal.lparen, lxr.next().ty);
     try std.testing.expectEqual(Terminal.literal_int, lxr.next().ty);
     try std.testing.expectEqual(Terminal.plus, lxr.next().ty);
@@ -471,7 +471,7 @@ test "lexer" {
     lxr = Lexer.init("fn fn() bool\n    var n = true\n    return false\nconst pi = 3.14");
     // first lexeme is always indent
     try std.testing.expectEqual(Terminal.indent, lxr.next().ty);
-    try std.testing.expectEqual(Terminal.newline, lxr.next().ty);
+    //try std.testing.expectEqual(Terminal.newline, lxr.next().ty);
     try std.testing.expectEqual(Terminal.ky_fn, lxr.next().ty);
     try std.testing.expectEqual(Terminal.identifier, lxr.next().ty);
     try std.testing.expectEqual(Terminal.lparen, lxr.next().ty);
@@ -486,7 +486,7 @@ test "lexer" {
     try std.testing.expectEqual(Terminal.ky_return, lxr.next().ty);
     try std.testing.expectEqual(Terminal.literal_false, lxr.next().ty);
     try std.testing.expectEqual(Terminal.unindent, lxr.next().ty);
-    try std.testing.expectEqual(Terminal.newline, lxr.next().ty);
+    //try std.testing.expectEqual(Terminal.newline, lxr.next().ty);
     try std.testing.expectEqual(Terminal.ky_const, lxr.next().ty);
     try std.testing.expectEqual(Terminal.identifier, lxr.next().ty);
     try std.testing.expectEqual(Terminal.equal, lxr.next().ty);
@@ -496,14 +496,14 @@ test "lexer" {
     lxr = Lexer.init("10'000");
     // first lexeme is always indent
     try std.testing.expectEqual(Terminal.indent, lxr.next().ty);
-    try std.testing.expectEqual(Terminal.newline, lxr.next().ty);
+    //try std.testing.expectEqual(Terminal.newline, lxr.next().ty);
     try std.testing.expectEqual(Terminal.literal_int, lxr.next().ty);
     try std.testing.expectEqual(Terminal.eof, lxr.next().ty);
 
     lxr = Lexer.init("1'0'0'0'0.50");
     // first lexeme is always indent
     try std.testing.expectEqual(Terminal.indent, lxr.next().ty);
-    try std.testing.expectEqual(Terminal.newline, lxr.next().ty);
+    //try std.testing.expectEqual(Terminal.newline, lxr.next().ty);
     try std.testing.expectEqual(Terminal.literal_float, lxr.next().ty);
     try std.testing.expectEqual(Terminal.eof, lxr.next().ty);
 }
