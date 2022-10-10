@@ -10,7 +10,6 @@ pub const Symbol = enum(i32) {
     file,
     var_decl,
     fn_proto,
-    var_seq,
     name,
     type_expr,
     identifier,

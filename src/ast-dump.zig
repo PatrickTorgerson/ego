@@ -122,28 +122,19 @@ pub fn dump(ast: Ast) !void {
                 out.inc(4);
                 try nodes.append(unindent);
 
-                const initializers = ast.range(node.r);
-                var iter = ReverseIter(Ast.Index).init(initializers);
-                while(iter.next()) |init_node| {
-                    try nodes.append(init_node);
-                }
-
-                try nodes.append(node.l); // var_seq
-            },
-
-            // .l = range(data) -> identifiers... (lexi)
-            // .r = unused
-            // identifiers = lexeme index
-            .var_seq => {
                 out.inc(4);
-
                 const identifiers = ast.range(node.l);
                 for(identifiers) |lexi| {
                     out.line();
                     out.print(ast.lexeme_str_lexi(lexi));
                 }
-
                 out.dec();
+
+                const initializers = ast.range(node.r);
+                var iter = ReverseIter(Ast.Index).init(initializers);
+                while(iter.next()) |init_node| {
+                    try nodes.append(init_node);
+                }
             },
 
             // .l = range(data) -> namespace identifiers... (lexi) | unused

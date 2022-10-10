@@ -72,11 +72,13 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
         .indent_stack = try std.ArrayList(usize).initCapacity(gpa, 8),
         .state_stack = try std.ArrayList(State).initCapacity(gpa, 32),
         .nodes = .{},
+        .counts = try std.ArrayList(usize).initCapacity(gpa, 16),
         .data = .{},
         .work_stack = .{},
         .diagnostics = .{},
     };
     defer parser.indent_stack.deinit();
+    defer parser.counts.deinit();
     defer parser.state_stack.deinit();
     defer parser.data.deinit(gpa);
     defer parser.work_stack.deinit(gpa);
@@ -99,7 +101,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
 
     // nodes on state.work_stack belonging to current symbol
     // (var_seq, expr_list, ...)
-    var node_count: usize = 0;
+    try parser.new_count();
 
     // main parsing loop
     while (true) {
@@ -153,12 +155,14 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
             // => KY_CONST, .var_seq, EQUAL, .expr_list
             .var_decl => {
                 try parser.push(parser.lexi); // lexeme
+                try parser.new_count();
+
                 // skip var or const
                 _ = parser.consume(.ky_var) orelse parser.consume(.ky_const).?;
+
                 try parser.state_stack.append(.create_var_decl_node);
                 try parser.state_stack.append(.expr_list);
                 try parser.state_stack.append(.expect_equal);
-                try parser.state_stack.append(.create_var_seq_node);
                 try parser.state_stack.append(.var_seq);
             },
 
@@ -193,7 +197,6 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                 if (parser.check(.identifier)) {
                     try parser.state_stack.append(.param_list_cont);
                     try parser.state_stack.append(.type_expr);
-                    try parser.state_stack.append(.push_node_count);
                     try parser.state_stack.append(.var_seq);
                 }
                 else if (parser.check(.rparen)) parser.advance()
@@ -240,7 +243,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
             .statement_line_cont => {
                 // advance past redundant newlines
                 while (parser.check_next(.newline)) parser.advance();
-                if (!parser.check(.unindent)) {
+                if (!parser.check(.unindent) and !parser.check(.eof)) {
                     try parser.state_stack.append(.statement_line_cont);
                     try parser.state_stack.append(.statement_line);
                 }
@@ -266,14 +269,19 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                 }
             },
 
+            // TODO: rename to identifier_list, create own node count
             // => IDENTIFIER, {COMMA, IDENTIFIER}
             .var_seq => {
                 if (parser.check(.identifier)) {
                     try parser.push(parser.lexi);
-                    node_count += 1;
+                    parser.inc_count();
                     parser.advance();
                     if (parser.consume(.comma)) |_|
-                        try parser.state_stack.append(.var_seq);
+                        try parser.state_stack.append(.var_seq)
+                    else {
+                        try parser.push_count();
+                        parser.old_count();
+                    }
                 } else try parser.diag_expected(.identifier);
             },
 
@@ -295,9 +303,11 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                     .identifier,
                     .colon_colon,
                     => {
+                        try parser.state_stack.append(.push_node_count);
                         try parser.state_stack.append(.expr_list_cont);
                         try parser.state_stack.append(.expression);
-                        node_count += 1;
+                        try parser.new_count();
+                        parser.inc_count();
                     },
                     else => {},
                 }
@@ -308,7 +318,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                 if (parser.consume(.comma)) |_| {
                     try parser.state_stack.append(.expr_list_cont);
                     try parser.state_stack.append(.expression);
-                    node_count += 1;
+                    parser.inc_count();
                 }
             },
 
@@ -433,52 +443,53 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                 // TODO: optional COLON_COLON prefix
                 _ = parser.consume(.colon_colon);
 
-                // node_count is already being used by .expr_list
-                // so we cache is here and restore it in .create_var_access_node
-                try parser.push(node_count);
-                node_count = 0;
+                try parser.new_count();
 
                 try parser.push(parser.lexi);
 
                 try parser.state_stack.append(.create_name_node);
                 try parser.state_stack.append(.field_resolution);
 
-                if(parser.peek() == .colon_colon)
-                    try parser.state_stack.append(.namespace_resolution)
+                if(parser.peek() == .colon_colon) {
+                    try parser.state_stack.append(.namespace_resolution);
+                    try parser.new_count();
+                }
                 else
                     try parser.push(0); // 0 namespace accessors
 
             },
 
+            // TODO: create own node count
             // => IDENTIFIER, {COLON_COLON, IDENTIFIER}, COLON_COLON
             .namespace_resolution => {
                 if (parser.check(.identifier)) {
                     if(parser.peek() == .colon_colon) {
                         try parser.push(parser.lexi);
-                        node_count += 1;
+                        parser.inc_count();
                         parser.advance(); // .identifier
                         parser.advance(); // .colon_colon
                         try parser.state_stack.append(.namespace_resolution);
                     }
                     else {
-                        try parser.push(node_count);
-                        node_count = 0;
+                        try parser.push_count();
+                        parser.old_count();
                     }
                 }
                 else try parser.diag_expected(.identifier);
             },
 
+            // TODO: create own node count
             // => IDENTIFIER, {PERIOD, IDENTIFIER}
             .field_resolution => {
                 if (parser.check(.identifier)) {
                     try parser.push(parser.lexi);
-                    node_count += 1;
+                    parser.inc_count();
                     parser.advance();
                     if (parser.consume(.period)) |_|
                         try parser.state_stack.append(.field_resolution)
                     else {
-                        try parser.push(node_count);
-                        node_count = 0;
+                        try parser.push_count();
+                        parser.old_count();
                     }
                 } else try parser.diag_expected(.identifier);
             },
@@ -532,13 +543,14 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                         parser.advance();
                     }
                 }
-                else try parser.diag_expected(.unindent);
+                else if(!parser.check(.eof))
+                    try parser.diag_expected(.unindent);
             },
 
             // =>
             .push_node_count => {
-                try parser.push(node_count);
-                node_count = 0;
+                try parser.push_count();
+                parser.old_count();
             },
 
             // -- node creation
@@ -565,53 +577,34 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                 try parser.push(node);
             },
 
-            // -> identifier_lexeme...
-            .create_var_seq_node => {
-                assert(node_count > 0);
-
-                const node = try parser.create_node(.{
-                    .symbol = .var_seq,
-                    .lexeme = parser.at(node_count - 1),
-                    .l = parser.data.items.len,
-                    .r = 0,
-                });
-
-                try parser.data.append(gpa, node_count);
-                try parser.data.appendSlice(gpa, parser.top_slice(node_count));
-
-                parser.popn(node_count);
-                try parser.push(node);
-
-                node_count = 0;
-            },
-
-            // -> expresion..., var_seq, lexeme
+            // -> expr_count, expresions..., var_count, var_identifiers..., lexeme
             .create_var_decl_node => {
-                if (node_count == 0)
+                const expr_count = parser.pop();
+                if (expr_count == 0)
                     try parser.diag(.expected_expression)
                 else {
                     const rhs = parser.data.items.len;
-                    try parser.data.append(gpa, node_count);
-                    try parser.data.appendSlice(gpa, parser.top_slice(node_count));
-                    parser.popn(node_count);
+                    try parser.data.append(gpa, expr_count);
+                    try parser.data.appendSlice(gpa, parser.top_slice(expr_count));
+                    parser.popn(expr_count);
 
-                    const node = try parser.create_node(.{
+                    const var_count = parser.pop();
+                    const lhs = parser.data.items.len;
+                    try parser.data.append(gpa, var_count);
+                    try parser.data.appendSlice(gpa, parser.top_slice(var_count));
+                    parser.popn(var_count);
+
+                    try parser.push_node(.{
                         .symbol = .var_decl,
-                        .lexeme = parser.at(1),
-                        .l = parser.at(0),
+                        .lexeme = parser.pop(),
+                        .l = lhs,
                         .r = rhs,
                     });
-
-                    parser.popn(2);
-                    try parser.push(node);
-
-                    node_count = 0;
                 }
             },
 
-            // -> var_count, var_identifiers..., namespace_count, namespace_identifiers..., lexeme, prev_node_count
+            // -> var_count, var_identifiers..., namespace_count, namespace_identifiers..., lexeme
             .create_name_node => {
-
                 const rhs = parser.data.items.len;
                 const var_count = parser.pop();
                 try parser.data.append(gpa, var_count);
@@ -630,7 +623,6 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                     else 0;
 
                 const lexi = parser.pop();
-                const prev_node_count = parser.pop();
 
                 try parser.push_node(.{
                     .symbol = .name,
@@ -638,9 +630,6 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                     .l = lhs,
                     .r = rhs,
                 });
-
-                // restore previouse node_count
-                node_count = prev_node_count;
             },
 
             // -> return_expr, [type_expr, count, identifier_lexeme...], 0, lexi
@@ -670,6 +659,10 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                 });
             },
 
+            // ->
+            .create_block_node => {},
+
+            // ->
             .create_fn_decl_node => { unreachable; },
 
             .eof => {
@@ -708,6 +701,7 @@ const Parser = struct {
     state_stack: std.ArrayList(Parser.State),
 
     nodes: std.MultiArrayList(Ast.Node),
+    counts: std.ArrayList(usize),
 
     // node indecies describing tree structure
     data: std.ArrayListUnmanaged(Ast.Index),
@@ -754,7 +748,7 @@ const Parser = struct {
 
     /// verifies next lexeme is of type 'terminal'
     pub fn check_next(this: Parser, terminal: Terminal) bool {
-        if(this.lexi >= this.lexeme_ty.len) return false;
+        if(this.lexi + 1 >= this.lexeme_ty.len) return false;
         return this.lexeme_ty[this.lexi + 1] == terminal;
     }
 
@@ -812,6 +806,31 @@ const Parser = struct {
     /// creates node, pushes index to work_stack
     pub fn push_node(this: *Parser, node: Ast.Node) !void {
         try this.push(try this.create_node(node));
+    }
+
+    ///
+    pub fn node_count(this: Parser) usize {
+        return this.counts.items[this.counts.items.len - 1];
+    }
+
+    ///
+    pub fn new_count(this: *Parser) !void {
+        try this.counts.append(0);
+    }
+
+    ///
+    pub fn old_count(this: *Parser) void {
+        _ = this.counts.pop();
+    }
+
+    ///
+    pub fn inc_count(this: *Parser) void {
+        this.counts.items[this.counts.items.len - 1] += 1;
+    }
+
+    ///
+    pub fn push_count(this: *Parser) !void {
+        try this.push(this.node_count());
     }
 
     /// log expected symbol diagnostic
@@ -874,11 +893,11 @@ const Parser = struct {
         push_node_count,
 
         create_binop_node,
-        create_var_seq_node,
         create_var_decl_node,
         create_name_node,
         create_fn_proto_node,
         create_fn_decl_node,
+        create_block_node,
 
         eof,
     };

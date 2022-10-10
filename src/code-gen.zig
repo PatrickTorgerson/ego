@@ -135,26 +135,11 @@ const Gen = struct {
         std.debug.print("{s}, ", .{@tagName(node.symbol)});
         switch (node.symbol) {
 
-            // .l = node -> var_seq
+            // .l = range(data) -> identifiers... (lexi)
             // .r = range(data) -> initializers...
             // initializers = node index
             .var_decl => {
-                const initializers = gen.ast.range(node.r);
-                var iter = ReverseIter(Ast.Index).init(initializers);
-                while(iter.next()) |init_node| {
-                    try gen.node_stack.append(init_node);
-                    try gen.state_stack.append(.var_init);
-                    try gen.state_stack.append(.node);
-                }
 
-                try gen.node_stack.append(node.l); // var_seq
-                try gen.state_stack.append(.node);
-            },
-
-            // .l = range(data) -> identifiers... (lexi)
-            // .r = unused
-            // identifiers = lexeme index
-            .var_seq => {
                 // add locals to map, initialize later (State.var_init)
                 const identifiers = gen.ast.range(node.l);
                 var iter = ReverseIter(Ast.Index).init(identifiers);
@@ -170,6 +155,14 @@ const Gen = struct {
                         entry.value_ptr.* = 0;
                         try gen.uninitialized_locals.append(identifier);
                     }
+                }
+
+                const initializers = gen.ast.range(node.r);
+                iter = ReverseIter(Ast.Index).init(initializers);
+                while(iter.next()) |init_node| {
+                    try gen.node_stack.append(init_node);
+                    try gen.state_stack.append(.var_init);
+                    try gen.state_stack.append(.node);
                 }
             },
 
