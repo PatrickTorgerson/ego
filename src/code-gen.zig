@@ -166,6 +166,19 @@ const Gen = struct {
                 }
             },
 
+            // .l = fn_proto
+            // .r = range(data) -> statement nodes
+            .fn_decl => {
+                // TODO: generate func info stuffs
+
+                const stmts = gen.ast.range(node.r);
+                var iter = ReverseIter(Ast.Index).init(stmts);
+                while(iter.next()) |stmt| {
+                    try gen.node_stack.append(stmt);
+                    try gen.state_stack.append(.node);
+                }
+            },
+
             // .l = range(data) -> namespace identifiers... (lexi) | unused
             // .r = range(data) -> variable identifiers... (lexi)
             .name => {

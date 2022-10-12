@@ -137,6 +137,21 @@ pub fn dump(ast: Ast) !void {
                 }
             },
 
+            // .l = fn_proto
+            // .r = range(data) -> statement nodes
+            .fn_decl => {
+                out.inc(4);
+                try nodes.append(unindent);
+
+                const stmts = ast.range(node.r);
+                var iter = ReverseIter(Ast.Index).init(stmts);
+                while(iter.next()) |stmt| {
+                    try nodes.append(stmt);
+                }
+
+                try nodes.append(node.l); // fn_proto
+            },
+
             // .l = range(data) -> namespace identifiers... (lexi) | unused
             // .r = range(data) -> variable identifiers... (lexi)
             .name => {

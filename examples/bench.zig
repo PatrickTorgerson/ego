@@ -11,8 +11,8 @@ const ego = @import("ego");
 const dump = ego.dump.dump;
 
 const src =
-    \\  pub fn main() void
-    \\      var a,b,c = 1,2,3
+    \\  fn main() void
+    \\    const a,b,c = 1, 1+2, 1+2+3
 ;
 
 pub fn main() !void
@@ -79,7 +79,7 @@ pub fn main() !void
     var instructions = ego.InstructionBuffer{ .buffer = code.buffer };
     try vm.execute(&instructions);
 
-    std.debug.print(" r = {d}\n", .{std.mem.bytesAsValue(f64, stack[8..16]).*});
-    std.debug.print(" d = {d}\n", .{std.mem.bytesAsValue(f64, stack[16..24]).*});
-    std.debug.print(" area = {d}\n", .{std.mem.bytesAsValue(f64, stack[24..32]).*});
+    // std.debug.print(" r = {d}\n", .{std.mem.bytesAsValue(f64, stack[8..16]).*});
+    // std.debug.print(" d = {d}\n", .{std.mem.bytesAsValue(f64, stack[16..24]).*});
+    // std.debug.print(" area = {d}\n", .{std.mem.bytesAsValue(f64, stack[24..32]).*});
 }

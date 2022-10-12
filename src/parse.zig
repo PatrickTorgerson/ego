@@ -168,7 +168,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
 
             // => KY_FN, .fn_proto, .anon_block
             .fn_decl => {
-                // try parser.push(parser.lexi); // lexeme
+                try parser.push(parser.lexi); // lexeme
                 _ = parser.consume(.ky_fn);
                 try parser.state_stack.append(.create_fn_decl_node);
                 try parser.state_stack.append(.anon_block);
@@ -222,6 +222,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                     .indent => {
                         try parser.indent_stack.append(parser.lexeme_width());
                         parser.advance();
+                        try parser.new_count();
 
                         try parser.state_stack.append(.block_end);
                         try parser.state_stack.append(.statement_line_cont);
@@ -252,6 +253,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
             // => .var_decl
             // => TODO:
             .statement => {
+                parser.inc_count();
                 switch (parser.lexeme()) {
                     .ky_var,
                     .ky_const =>
@@ -536,6 +538,9 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
 
             // => UNINDENT
             .block_end => {
+                try parser.push_count();
+                parser.old_count();
+
                 if(parser.check(.unindent)) {
                     const indent = parser.lexeme_width();
                     _ = parser.indent_stack.pop();
@@ -659,11 +664,36 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                 });
             },
 
-            // ->
-            .create_block_node => {},
+            // -> TODO: stmt_count, statments..., name, lexi
+            .create_block_node => {
+                unreachable;
+                // const stmt_count = parser.pop();
+                // const rhs = parser.data.items.len;
+                // try parser.data.append(stmt_count);
+                // try parser.data.appendSlice(parser.top_slice(stmt_count));
+                // try parser.push_node(.{
+                //     .symbol = .block,
+                //     .lexeme = 0,
+                //     .l = 0,
+                //     .r = rhs,
+                // });
+            },
 
-            // ->
-            .create_fn_decl_node => { unreachable; },
+            // -> stmt_count, statments..., fn_proto, lexi
+            .create_fn_decl_node => {
+                const stmt_count = parser.pop();
+                const rhs = parser.data.items.len;
+                try parser.data.append(gpa, stmt_count);
+                try parser.data.appendSlice(gpa, parser.top_slice(stmt_count));
+                parser.popn(stmt_count);
+                const lhs = parser.pop();
+                try parser.push_node(.{
+                    .symbol = .fn_decl,
+                    .lexeme = parser.pop(),
+                    .l = lhs,
+                    .r = rhs,
+                });
+             },
 
             .eof => {
                 if (parser.lexeme() != .eof)
