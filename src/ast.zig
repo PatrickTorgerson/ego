@@ -64,6 +64,7 @@ pub const Ast = struct {
         std.debug.assert(node.symbol == .fn_proto);
         const size = node.r * 2;
         return FnProto {
+            .name = ast.lexeme_str(node),
             .return_expr = ast.data[node.l],
             .params = ast.data[node.l + 1 .. node.l + size + 1],
         };
@@ -86,6 +87,7 @@ pub const Ast = struct {
     }
 
     pub const FnProto = struct {
+        name: []const u8,
         return_expr: Index,
 
         // each param has two elemetns, a lexi and a type_expr node index

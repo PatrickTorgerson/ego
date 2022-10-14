@@ -17,6 +17,7 @@ const State = Gen.State;
 
 pub const CodePage = struct {
     buffer: []const u8,
+    funcs: []const Function,
     kst: []const u8,
     kst_map: []const MappedBufferStack.Entry,
 };
@@ -34,6 +35,7 @@ pub fn gen_code(allocator: std.mem.Allocator, ast: Ast, tytable: *TypeTable) !Co
         .type_table = tytable,
         .ins_buffer = try std.ArrayList(u8).initCapacity(allocator, ast.nodes.len),
         .operand_stack = std.ArrayList(StackEntry).init(allocator),
+        .funcs = std.ArrayList(Function).init(allocator),
         .kst = MappedBufferStack.init(allocator),
         .locals = std.StringHashMap(usize).init(allocator),
         .uninitialized_locals = std.ArrayList([]const u8).init(allocator),
@@ -43,6 +45,7 @@ pub fn gen_code(allocator: std.mem.Allocator, ast: Ast, tytable: *TypeTable) !Co
     };
     defer gen.ins_buffer.deinit();
     defer gen.operand_stack.deinit();
+    defer gen.funcs.deinit();
     defer gen.kst.deinit();
     defer gen.locals.deinit();
     defer gen.uninitialized_locals.deinit();
@@ -102,6 +105,7 @@ pub fn gen_code(allocator: std.mem.Allocator, ast: Ast, tytable: *TypeTable) !Co
 
     return CodePage {
         .buffer = gen.ins_buffer.toOwnedSlice(),
+        .funcs = gen.funcs.toOwnedSlice(),
         .kst = gen.kst.buff.to_owned_slice(),
         .kst_map = gen.kst.map.toOwnedSlice(),
     };
@@ -121,6 +125,7 @@ const Gen = struct {
     // simulated runtime stack, used to determine local stack indeces
     top: usize = 0,
 
+    funcs: std.ArrayList(Function),
     kst: MappedBufferStack,
 
     locals: std.StringHashMap(usize),
@@ -169,14 +174,28 @@ const Gen = struct {
             // .l = fn_proto
             // .r = range(data) -> statement nodes
             .fn_decl => {
-                // TODO: generate func info stuffs
-
+                // push statements
                 const stmts = gen.ast.range(node.r);
                 var iter = ReverseIter(Ast.Index).init(stmts);
                 while(iter.next()) |stmt| {
                     try gen.node_stack.append(stmt);
                     try gen.state_stack.append(.node);
                 }
+                // prototype
+                try gen.node_stack.append(node.l);
+                try gen.state_stack.append(.node);
+            },
+
+            // .l = FnProto(data)
+            // .r = param_count
+            .fn_proto => {
+                // TODO: check for duplicates
+                // TODO: gen param infos
+                const proto = gen.ast.fn_proto(node);
+                try gen.funcs.append(.{
+                    .name = proto.name,
+                    .offset = gen.ins_buffer.items.len, // may point to padding
+                });
             },
 
             // .l = range(data) -> namespace identifiers... (lexi) | unused
@@ -242,7 +261,6 @@ const Gen = struct {
             },
 
             // TODO: implement
-            .fn_proto,
             .literal_true,
             .literal_false,
             .literal_nil,
@@ -455,4 +473,12 @@ const StackEntry = struct {
     stack_index: u16,
     temp: bool,
     // value: ?Value
+};
+
+pub const Function = struct {
+    // TODO: currently slices into source, copy to managed string buffer
+    //       so source doesn't need to be kept alive
+    name: []const u8,
+    offset: usize,
+    // TODO: params, param_types, signiture
 };

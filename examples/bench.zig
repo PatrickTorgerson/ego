@@ -76,7 +76,11 @@ pub fn main() !void
     var stack: [256]u8 = undefined;
     vm.kst = code.kst;
     vm.stack = stack[0..];
-    var instructions = ego.InstructionBuffer{ .buffer = code.buffer };
+
+    var instructions = ego.InstructionBuffer{
+        .buffer = code.buffer[code.funcs[0].offset .. ]
+    };
+
     try vm.execute(&instructions);
 
     // std.debug.print(" r = {d}\n", .{std.mem.bytesAsValue(f64, stack[8..16]).*});
