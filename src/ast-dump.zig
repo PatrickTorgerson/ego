@@ -114,7 +114,7 @@ pub fn dump(ast: Ast) !void {
         switch (node.symbol) {
 
             // .l = node -> var_seq
-            // .r = range(data) -> initializers...
+            // .r = range(data) -> initializers
             // initializers = node index
             .var_decl => {
                 std.debug.print(": {s}", .{ast.lexeme_str(node)});
@@ -150,6 +150,23 @@ pub fn dump(ast: Ast) !void {
                 }
 
                 try nodes.append(node.l); // fn_proto
+            },
+
+            // .l = name_node
+            // .r = range(data) -> arg expressions
+            .fn_call => {
+                out.inc(4);
+                try nodes.append(unindent);
+
+                try nodes.append(unindent);
+                const args = ast.range(node.r);
+                var iter = ReverseIter(Ast.Index).init(args);
+                while(iter.next()) |expr| {
+                    try nodes.append(expr);
+                }
+                try nodes.append(indent);
+
+                try nodes.append(node.l); // name
             },
 
             // .l = range(data) -> namespace identifiers... (lexi) | unused

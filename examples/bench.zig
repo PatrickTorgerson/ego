@@ -11,8 +11,12 @@ const ego = @import("ego");
 const dump = ego.dump.dump;
 
 const src =
+    \\  fn dosomethigs(n int) void
+    \\      var in = n
+    \\      var squared = n * n
+    \\
     \\  fn main() void
-    \\    const a,b,c = 1, 1+2, 1+2+3
+    \\    dosomethigs(12+5, 666.420, 69)
 ;
 
 pub fn main() !void

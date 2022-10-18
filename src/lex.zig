@@ -56,7 +56,6 @@ pub const Lexer = struct {
     source: [:0]const u8,
     cursor: usize,
     prev_indent: usize,
-    pending_newline: usize,
 
     const npos = ~@as(usize, 0);
 
@@ -92,7 +91,6 @@ pub const Lexer = struct {
             .source = source[start..],
             .cursor = npos,
             .prev_indent = 0,
-            .pending_newline = npos,
         };
     }
 
@@ -120,22 +118,12 @@ pub const Lexer = struct {
             lex.end = this.cursor;
             this.prev_indent = lex.end;
 
-            this.pending_newline = npos;
-
             return lex;
         }
 
         // eof
         if (this.at() == 0) {
             lex.end = this.cursor;
-            return lex;
-        }
-
-        if (this.pending_newline != npos) {
-            lex.ty = .newline;
-            lex.start = this.pending_newline;
-            lex.end = this.cursor;
-            this.pending_newline = npos;
             return lex;
         }
 
@@ -270,7 +258,6 @@ pub const Lexer = struct {
                         } else if (new_indent < this.prev_indent) {
                             lex.ty = .unindent;
                             this.prev_indent = new_indent;
-                            // this.pending_newline = lex.start;
                             break;
                         }
                     },

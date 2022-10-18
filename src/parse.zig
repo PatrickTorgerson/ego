@@ -109,9 +109,8 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
         std.debug.print("== {s: ^20} : '{s}'\n", .{@tagName(state), source[ parser.lexeme_starts[parser.lexi] .. parser.lexeme_ends[parser.lexi] ]});
 
         switch (state) {
-            // => .top_decl, .top_decl_cont, .line_end,
+            // => .top_decl, .top_decl_cont
             .top_decl_line => {
-                try parser.state_stack.append(.line_end);
                 try parser.state_stack.append(.top_decl_cont);
                 try parser.state_stack.append(.top_decl);
             },
@@ -119,7 +118,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
             // => [.top_decl_line, .top_decl_line_cont]
             .top_decl_line_cont => {
                 // advance past redundant newlines
-                while (parser.check_next(.newline)) parser.advance();
+                while (parser.check(.newline)) parser.advance();
                 if(!parser.check(.eof)) {
                     try parser.state_stack.append(.top_decl_line_cont);
                     try parser.state_stack.append(.top_decl_line);
@@ -141,8 +140,10 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                 _ = parser.consume(.ky_pub);
                 switch (parser.lexeme()) {
                     .ky_var,
-                    .ky_const =>
-                        try parser.state_stack.append(.var_decl),
+                    .ky_const => {
+                        try parser.state_stack.append(.top_decl_end);
+                        try parser.state_stack.append(.var_decl);
+                    },
                     .ky_fn =>
                         // TODO: fn aliases
                         // TODO: method_decl
@@ -161,6 +162,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                 _ = parser.consume(.ky_var) orelse parser.consume(.ky_const).?;
 
                 try parser.state_stack.append(.create_var_decl_node);
+
                 try parser.state_stack.append(.expr_list);
                 try parser.state_stack.append(.expect_equal);
                 try parser.state_stack.append(.var_seq);
@@ -233,9 +235,8 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                 }
             },
 
-            // => .statement, .statement_cont, .line_end
+            // => .statement, .statement_cont
             .statement_line => {
-                try parser.state_stack.append(.line_end);
                 try parser.state_stack.append(.statement_cont);
                 try parser.state_stack.append(.statement);
             },
@@ -243,7 +244,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
             // => [.statement_line, .statement_line_cont]
             .statement_line_cont => {
                 // advance past redundant newlines
-                while (parser.check_next(.newline)) parser.advance();
+                while (parser.check(.newline)) parser.advance();
                 if (!parser.check(.unindent) and !parser.check(.eof)) {
                     try parser.state_stack.append(.statement_line_cont);
                     try parser.state_stack.append(.statement_line);
@@ -251,13 +252,23 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
             },
 
             // => .var_decl
-            // => TODO:
+            // => .fn_call
+            // => .assign
+            // => TODO: if, for, switch, defer
             .statement => {
                 parser.inc_count();
                 switch (parser.lexeme()) {
                     .ky_var,
-                    .ky_const =>
-                        try parser.state_stack.append(.var_decl),
+                    .ky_const => {
+                        try parser.state_stack.append(.statement_end);
+                        try parser.state_stack.append(.var_decl);
+                    },
+                    .colon_colon,
+                    .identifier => {
+                        try parser.state_stack.append(.statement_end);
+                        try parser.state_stack.append(.assign_or_call);
+                        try parser.state_stack.append(.name);
+                    },
                     else => try parser.diag(.expected_statement),
                 }
             },
@@ -305,7 +316,6 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                     .identifier,
                     .colon_colon,
                     => {
-                        try parser.state_stack.append(.push_node_count);
                         try parser.state_stack.append(.expr_list_cont);
                         try parser.state_stack.append(.expression);
                         try parser.new_count();
@@ -321,6 +331,10 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                     try parser.state_stack.append(.expr_list_cont);
                     try parser.state_stack.append(.expression);
                     parser.inc_count();
+                }
+                else {
+                    try parser.push_count();
+                    parser.old_count();
                 }
             },
 
@@ -517,6 +531,37 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                 //         // parse error, expected unary op
                 //     }
                 // }
+                unreachable; // TODO: unary parsing not yet implemented
+            },
+
+            // => .assign_rhs
+            // => .fn_call_args
+            .assign_or_call => {
+                switch(parser.lexeme()) {
+                    .equal,
+                    .plus_equal,
+                    .minus_equal,
+                    .star_equal,
+                    .slash_equal => {
+                        // parser.advance();
+                        // try parser.state_stack.append(.assign_rhs);
+                        unreachable; // TODO: asignment not yet implemented :(
+                    },
+                    .comma => {
+                        unreachable; // TODO: muli asignment not yet implemented :(
+                    },
+                    .lparen => {
+                        try parser.push(parser.lexi);
+                        parser.advance();
+                        try parser.state_stack.append(.create_fn_call_node);
+                        try parser.state_stack.append(.expect_rparen);
+                        try parser.state_stack.append(.expr_list);
+                        // name already on work stack
+                    },
+                    else => {
+                        try parser.diag(.expected_assignment_or_fn_call);
+                    },
+                }
             },
 
             // => EQUAL
@@ -524,19 +569,35 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                 if (parser.consume(.equal)) |_| {} else try parser.diag_expected(.equal);
             },
 
+            // => RPAREN
+            .expect_rparen => {
+                if (parser.consume(.rparen)) |_| {} else try parser.diag_expected(.rparen);
+            },
+
             // => [SEMICOLON], NEWLINE
-            // => [SEMICOLON], INDENT
-            // => [SEMICOLON], UNINDENT
             // => [SEMICOLON], EOF
-            .line_end => {
+            .top_decl_end => {
                 _ = parser.consume(.semicolon);
                 switch(parser.lexeme()) {
-                    .newline, .indent, .unindent, .eof => {},
+                    .newline => parser.advance(),
+                    .eof => {},
+                    else => try parser.diag_expected(.newline),
+                }
+            },
+
+            // => [SEMICOLON], NEWLINE
+            // => [SEMICOLON], EOF
+            .statement_end => {
+                _ = parser.consume(.semicolon);
+                switch(parser.lexeme()) {
+                    .newline => parser.advance(),
+                    .eof, .unindent => {},
                     else => try parser.diag_expected(.newline),
                 }
             },
 
             // => UNINDENT
+            // => TODO: explicit block ends
             .block_end => {
                 try parser.push_count();
                 parser.old_count();
@@ -693,8 +754,35 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                     .l = lhs,
                     .r = rhs,
                 });
-             },
+            },
 
+            // -> expr_count, expresions..., lexi, name_node
+            .create_fn_call_node => {
+                const expr_count = parser.pop();
+
+                const rhs =
+                    if (expr_count == 0)
+                        0
+                    else blk: {
+                        const rhs_val = parser.data.items.len;
+                        try parser.data.append(gpa, expr_count);
+                        try parser.data.appendSlice(gpa, parser.top_slice(expr_count));
+                        parser.popn(expr_count);
+                        break :blk rhs_val;
+                    };
+
+                const lexi = parser.pop();
+                const lhs = parser.pop(); // name_node
+
+                try parser.push_node(.{
+                    .symbol = .fn_call,
+                    .lexeme = lexi,
+                    .l = lhs,
+                    .r = rhs,
+                });
+            },
+
+            // eof
             .eof => {
                 if (parser.lexeme() != .eof)
                     try parser.diag_expected(.eof);
@@ -915,11 +1003,14 @@ const Parser = struct {
         namespace_resolution,
         field_resolution,
 
+        assign_or_call,
         close_paren,
-        line_end,
+        top_decl_end,
+        statement_end,
         block_end,
         optional_type_expr,
         expect_equal,
+        expect_rparen,
         push_node_count,
 
         create_binop_node,
@@ -927,6 +1018,7 @@ const Parser = struct {
         create_name_node,
         create_fn_proto_node,
         create_fn_decl_node,
+        create_fn_call_node,
         create_block_node,
 
         eof,

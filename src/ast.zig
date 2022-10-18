@@ -47,6 +47,7 @@ pub const Ast = struct {
             expected_statement,
             expected_block,
             expected_expression,
+            expected_assignment_or_fn_call,
             invalid_token,
 
             /// `expected` is populated.
