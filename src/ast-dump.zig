@@ -158,15 +158,21 @@ pub fn dump(ast: Ast) !void {
                 out.inc(4);
                 try nodes.append(unindent);
 
-                try nodes.append(unindent);
                 const args = ast.range(node.r);
                 var iter = ReverseIter(Ast.Index).init(args);
                 while(iter.next()) |expr| {
                     try nodes.append(expr);
                 }
-                try nodes.append(indent);
 
                 try nodes.append(node.l); // name
+            },
+
+            // .l = expression
+            // .r = unused
+            .ret => {
+                out.inc(4);
+                try nodes.append(unindent);
+                try nodes.append(node.l);
             },
 
             // .l = range(data) -> namespace identifiers... (lexi) | unused

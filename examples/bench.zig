@@ -11,12 +11,11 @@ const ego = @import("ego");
 const dump = ego.dump.dump;
 
 const src =
-    \\  fn dosomethigs(n int) void
-    \\      var in = n
-    \\      var squared = n * n
+    \\  fn squared(n int) int
+    \\      return n * n
     \\
     \\  fn main() void
-    \\    dosomethigs(12+5, 666.420, 69)
+    \\    const n, n2 = 20, squared(n)
 ;
 
 pub fn main() !void
@@ -59,33 +58,33 @@ pub fn main() !void
 
     try dump(ast);
 
-    std.debug.print("\n====================== code gen ======================\n\n", .{});
-
-    var tytable = ego.TypeTable.init(ally);
-    defer tytable.deinit();
-
-    const code = try ego.codegen.gen_code(ally, ast, &tytable);
-
-    std.debug.print("code size : {}bytes\n", .{code.buffer.len});
-
-    std.debug.print("\n==================== disassembly ========================\n\n", .{});
-
-    const out = std.io.getStdOut().writer();
-    try ego.disassemble(out, code, tytable);
-
-
-    std.debug.print("\n====================== result ======================\n\n", .{});
-
-    var vm = ego.Vm{};
-    var stack: [256]u8 = undefined;
-    vm.kst = code.kst;
-    vm.stack = stack[0..];
-
-    var instructions = ego.InstructionBuffer{
-        .buffer = code.buffer[code.funcs[0].offset .. ]
-    };
-
-    try vm.execute(&instructions);
+//     std.debug.print("\n====================== code gen ======================\n\n", .{});
+//
+//     var tytable = ego.TypeTable.init(ally);
+//     defer tytable.deinit();
+//
+//     const code = try ego.codegen.gen_code(ally, ast, &tytable);
+//
+//     std.debug.print("code size : {}bytes\n", .{code.buffer.len});
+//
+//     std.debug.print("\n==================== disassembly ========================\n\n", .{});
+//
+//     const out = std.io.getStdOut().writer();
+//     try ego.disassemble(out, code, tytable);
+//
+//
+//     std.debug.print("\n====================== result ======================\n\n", .{});
+//
+//     var vm = ego.Vm{};
+//     var stack: [256]u8 = undefined;
+//     vm.kst = code.kst;
+//     vm.stack = stack[0..];
+//
+//     var instructions = ego.InstructionBuffer{
+//         .buffer = code.buffer[code.funcs[0].offset .. ]
+//     };
+//
+//     try vm.execute(&instructions);
 
     // std.debug.print(" r = {d}\n", .{std.mem.bytesAsValue(f64, stack[8..16]).*});
     // std.debug.print(" d = {d}\n", .{std.mem.bytesAsValue(f64, stack[16..24]).*});

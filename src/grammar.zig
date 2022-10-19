@@ -15,6 +15,7 @@ pub const Symbol = enum(i32) {
     name,
     type_expr,
     identifier,
+    ret,
 
     // literals
     // NOTE: order is important here, see Symbol.init_literal()

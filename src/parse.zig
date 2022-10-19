@@ -254,6 +254,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
             // => .var_decl
             // => .fn_call
             // => .assign
+            // => RETURN, .expression
             // => TODO: if, for, switch, defer
             .statement => {
                 parser.inc_count();
@@ -268,6 +269,12 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                         try parser.state_stack.append(.statement_end);
                         try parser.state_stack.append(.assign_or_call);
                         try parser.state_stack.append(.name);
+                    },
+                    .ky_return => {
+                        try parser.push(parser.lexi);
+                        parser.advance();
+                        try parser.state_stack.append(.create_ret_node);
+                        try parser.state_stack.append(.expression);
                     },
                     else => try parser.diag(.expected_statement),
                 }
@@ -370,7 +377,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
             // => .unary, .expr_cont
             // => LITERAL, .expr_cont
             // => LPAREN, .expression, .close_paren, .expr_cont
-            // => TODO: .fn_call, .expr_cont
+            // => .name, .possibly_fn_call, .expr_cont
             .expression => {
                 try parser.state_stack.append(.expr_cont);
                 switch (parser.lexeme()) {
@@ -396,7 +403,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
 
                     .colon_colon,
                     .identifier => {
-                        // TODO: function calls, for now we asume var access
+                        try parser.state_stack.append(.possibly_fn_call);
                         try parser.state_stack.append(.name);
                     },
 
@@ -561,6 +568,18 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                     else => {
                         try parser.diag(.expected_assignment_or_fn_call);
                     },
+                }
+            },
+
+            // => [.fn_call_args]
+            .possibly_fn_call => {
+                if (parser.check(.lparen)) {
+                    try parser.push(parser.lexi);
+                    parser.advance();
+                    try parser.state_stack.append(.create_fn_call_node);
+                    try parser.state_stack.append(.expect_rparen);
+                    try parser.state_stack.append(.expr_list);
+                    // name already on work stack
                 }
             },
 
@@ -779,6 +798,19 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                     .lexeme = lexi,
                     .l = lhs,
                     .r = rhs,
+                });
+            },
+
+            // -> expression, lexi
+            .create_ret_node => {
+                const expr = parser.pop();
+                const lexi = parser.pop();
+
+                try parser.push_node(.{
+                    .symbol = .ret,
+                    .lexeme = lexi,
+                    .l = expr,
+                    .r = 0,
                 });
             },
 
@@ -1004,6 +1036,7 @@ const Parser = struct {
         field_resolution,
 
         assign_or_call,
+        possibly_fn_call,
         close_paren,
         top_decl_end,
         statement_end,
@@ -1019,6 +1052,7 @@ const Parser = struct {
         create_fn_proto_node,
         create_fn_decl_node,
         create_fn_call_node,
+        create_ret_node,
         create_block_node,
 
         eof,

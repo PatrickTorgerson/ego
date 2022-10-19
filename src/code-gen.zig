@@ -198,6 +198,12 @@ const Gen = struct {
                 });
             },
 
+            // .l = expr_node
+            // .r = unused
+            .ret => {
+                unreachable; // TODO: not yet implemented
+            },
+
             // .l = range(data) -> namespace identifiers... (lexi) | unused
             // .r = range(data) -> variable identifiers... (lexi)
             .name => {
