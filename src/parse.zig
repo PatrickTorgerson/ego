@@ -717,7 +717,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                 });
             },
 
-            // -> return_expr, [type_expr, count, identifier_lexeme...], 0, lexi
+            // -> return_expr, [type_expr, count, identifier_lexi...], 0, lexi
             .create_fn_proto_node => {
 
                 const lhs = parser.data.items.len;
@@ -728,7 +728,7 @@ pub fn parse(gpa: std.mem.Allocator, source: [:0]const u8) !Ast {
                     const type_expr = top;
                     var count = parser.pop();
                     while (count > 0) : (count -= 1) {
-                        try parser.data.append(gpa, parser.pop());
+                        try parser.data.append(gpa, parser.pop()); // identifier_lexi
                         try parser.data.append(gpa, type_expr);
                         param_count += 1;
                     }

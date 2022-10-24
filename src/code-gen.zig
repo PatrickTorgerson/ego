@@ -52,6 +52,9 @@ pub fn gen_code(allocator: std.mem.Allocator, ast: Ast, tytable: *TypeTable) !Co
     defer gen.node_stack.deinit();
     defer gen.state_stack.deinit();
 
+    var calls = std.ArrayList(usize).init(allocator);
+    defer calls.deinit();
+
     // append top level decl nodes
     const root = ast.nodes.get(0);
     if (root.l != root.r) {
@@ -93,15 +96,35 @@ pub fn gen_code(allocator: std.mem.Allocator, ast: Ast, tytable: *TypeTable) !Co
                 }
             },
 
+            .param_init => {
+                // mark param as non temp such that subsequent parms don't overrite
+                gen.operand_stack.items[gen.operand_stack.items.len - 1].temp = false;
+            },
+
             .gen_add => try gen.gen_binop(.gen_add),
             .gen_sub => try gen.gen_binop(.gen_sub),
             .gen_mul => try gen.gen_binop(.gen_mul),
             .gen_div => try gen.gen_binop(.gen_div),
+
+            .gen_call => {
+                const fni = gen.node_stack.pop();
+                const b = gen.node_stack.pop();
+                gen.write_op(.call, 8);
+                try calls.append(gen.ins_buffer.len);
+                gen.write(usize, gen.funcs.items[fni].offset);
+                gen.write(u16, @intCast(u16, b));
+            },
         }
 
         std.debug.print("\n", .{});
     }
     std.debug.print("\n", .{});
+
+    for(calls.items) |call| {
+        const offset = std.mem.bytesToValue(usize, gen.ins_buffer.items[call..call + 8]);
+        const ptr = @ptrToInt(gen.ins_buffer.items.ptr + offset);
+        std.mem.writeIntSlice(usize, gen.ins_buffer.items[call..call + 8], ptr);
+    }
 
     return CodePage {
         .buffer = gen.ins_buffer.toOwnedSlice(),
@@ -136,7 +159,7 @@ const Gen = struct {
 
     /// generates code for the top node in `node_stack`
     pub fn do_node(gen: *Gen) !void {
-        var node = gen.ast.nodes.get(gen.node_stack.pop());
+        const node = gen.ast.nodes.get(gen.node_stack.pop());
         std.debug.print("{s}, ", .{@tagName(node.symbol)});
         switch (node.symbol) {
 
@@ -192,10 +215,61 @@ const Gen = struct {
                 // TODO: check for duplicates
                 // TODO: gen param infos
                 const proto = gen.ast.fn_proto(node);
+
+                const ret_tid = gen.init_type(gen.ast.nodes.get(proto.return_expr)).?;
+                const ret_size = gen.type_table.sizeof(ret_tid).?;
+
+                const stackalign = blk: {
+                    if(proto.params.len == 0)
+                        // TODO: use max(ret_size, first_local_size)
+                        break :blk 16
+                    else {
+                        const tid = gen.init_type(gen.ast.nodes.get(proto.params[1])).?;
+                        const size = gen.type_table.sizeof(tid).?;
+                        break :blk std.mem.max(usize, [_]usize{ret_size, size});
+                    }
+                };
+
                 try gen.funcs.append(.{
                     .name = proto.name,
                     .offset = gen.ins_buffer.items.len, // may point to padding
+                    .stack_alignment = stackalign,
                 });
+            },
+
+            // .l = name_node
+            // .r = range(data) -> arguments
+            .fn_call => {
+                const name_node = gen.ast.nodes.get(node.l);
+
+                if(name_node.l != 0) {
+                    unreachable; // TODO: // namespaces don't exist
+                }
+
+                const variables = gen.ast.range(name_node.r);
+
+                if(variables.len > 1) {
+                    unreachable; // TODO: methods
+                }
+
+                const fni = for(gen.funcs.items) |f,i| {
+                    if(std.mem.eql(u8, f.name, gen.ast.lexeme_str_lexi(variables[0])))
+                        break i;
+                } else unreachable; // TODO error: calling function that doesn't exist
+
+                gen.top += gen.padding(gen.top, gen.funcs.items[fni].stack_alignment);
+
+                try gen.node_stack.append(gen.top);
+                try gen.node_stack.append(fni);
+                try gen.state_stack.append(.gen_call);
+
+                const args = gen.ast.range(node.r);
+                const iter = ReverseIter(Ast.Index).init(args);
+                while(iter.next()) |arg_node| {
+                    try gen.node_stack.append(arg_node);
+                    try gen.state_stack.append(.param_init); // will mark value as non-temp
+                    try gen.state_stack.append(.node);
+                }
             },
 
             // .l = expr_node
@@ -207,17 +281,14 @@ const Gen = struct {
             // .l = range(data) -> namespace identifiers... (lexi) | unused
             // .r = range(data) -> variable identifiers... (lexi)
             .name => {
-                // var access
                 if(node.l != 0) {
-                    // TODO: this
-                    unreachable; // namespaces don't exist
+                    unreachable; // TODO: namespaces don't exist
                 }
 
                 const variables = gen.ast.range(node.r);
 
                 if(variables.len > 1) {
-                    // TODO: this
-                    unreachable; // member access doesn't exist
+                    unreachable; // TODO: member access doesn't exist
                 }
 
                 if(gen.locals.get(gen.ast.lexeme_str_lexi(variables[0]))) |local| {
@@ -244,7 +315,7 @@ const Gen = struct {
                 try gen.write(u16, stack_index);
                 try gen.write(u16, k);
 
-                const tid = try gen.type_table.add_type(gen.init_type(node).?);
+                const tid = gen.init_type(node).?;
 
                 try gen.operand_stack.append(.{
                     .tid = tid,
@@ -267,7 +338,6 @@ const Gen = struct {
             },
 
             // TODO: implement
-            .fn_call,
             .literal_true,
             .literal_false,
             .literal_nil,
@@ -381,27 +451,40 @@ const Gen = struct {
     }
 
     /// creates a Type object from a literal node or a type_expr node
-    fn init_type(gen: *Gen, node: Ast.Node) ?Type {
-        _ = gen;
-        switch (node.symbol) {
+    fn init_type(gen: *Gen, node: Ast.Node) ?usize {
+        const ty: Type = switch (node.symbol) {
             .literal_float =>
-                return Type{ .float = {} },
+                Type{ .float = {} },
             .literal_hex,
             .literal_octal,
             .literal_binary,
             .literal_int =>
-                return Type{ .int = {} },
+                Type{ .int = {} },
             .literal_true,
             .literal_false =>
-                return Type{ .bool = {} },
+                Type{ .bool = {} },
             .literal_nil =>
-                return Type{ .nil = {} },
-            .literal_string => unreachable,
+                Type{ .nil = {} },
 
+            .identifier => blk: {
+                const str = gen.ast.lexeme_str(node);
+                const eql = std.mem.eql;
+
+                if(eql(u8, str, "int"))
+                    break :blk Type{ .int = {} };
+                if(eql(u8, str, "float"))
+                    break :blk Type{ .float = {} };
+                if(eql(u8, str, "bool"))
+                    break :blk Type{ .bool = {} };
+            },
+
+            .literal_string => unreachable,
             .type_expr => unreachable,
 
-            else => return null,
-        }
+            else => null,
+        };
+
+        return gen.type_table.add_type(ty) catch null;
     }
 
     /// alignment specifys the requested alignment for the instruction's payload,
@@ -487,5 +570,6 @@ pub const Function = struct {
     //       so source doesn't need to be kept alive
     name: []const u8,
     offset: usize,
+    stack_alignment: usize,
     // TODO: params, param_types, signiture
 };

@@ -58,21 +58,20 @@ pub fn main() !void
 
     try dump(ast);
 
-//     std.debug.print("\n====================== code gen ======================\n\n", .{});
-//
-//     var tytable = ego.TypeTable.init(ally);
-//     defer tytable.deinit();
-//
-//     const code = try ego.codegen.gen_code(ally, ast, &tytable);
-//
-//     std.debug.print("code size : {}bytes\n", .{code.buffer.len});
-//
-//     std.debug.print("\n==================== disassembly ========================\n\n", .{});
-//
-//     const out = std.io.getStdOut().writer();
-//     try ego.disassemble(out, code, tytable);
-//
-//
+    std.debug.print("\n====================== code gen ======================\n\n", .{});
+
+    var tytable = ego.TypeTable.init(ally);
+    defer tytable.deinit();
+
+    const code = try ego.codegen.gen_code(ally, ast, &tytable);
+
+    std.debug.print("code size : {}bytes\n", .{code.buffer.len});
+
+    std.debug.print("\n==================== disassembly ========================\n\n", .{});
+
+    const out = std.io.getStdOut().writer();
+    try ego.disassemble(out, code, tytable);
+
 //     std.debug.print("\n====================== result ======================\n\n", .{});
 //
 //     var vm = ego.Vm{};

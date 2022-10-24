@@ -14,11 +14,24 @@ const Value = @import("value.zig").Value;
 pub const Vm = struct {
     pub const Error = error{stack_overflow} || Value.Error;
 
+    pub const Callframe = struct{
+        base: []u8,
+        ret_addr: [*]u8,
+    };
+
     stack: []u8 = undefined,
     kst: []const u8 = undefined,
 
     /// execute ego bytecode
-    pub fn execute(vm: *Vm, instructions: *InstructionBuffer) Error!void {
+    pub fn execute(vm: *Vm, allocator: std.mem.Allocator, instructions: *InstructionBuffer) Error!void {
+
+        var frames = std.ArrayList(Callframe).init(allocator);
+        defer frames.deinit();
+
+        frames.append(.{
+            .base = vm.stack[0..],
+            .ret_addr = undefined,
+        });
 
         while (instructions.buffer.len > 0) {
             switch (instructions.read_op()) {
@@ -46,6 +59,21 @@ pub const Vm = struct {
                     const d = instructions.read(u16);
                     const s = instructions.read(u16);
                     vm.stack_at(u64, d).* = vm.stack_at(u64, s).*;
+                },
+
+                .call => {
+                    const f = instructions.read(usize);
+                    const b = instructions.read(u16);
+                    try frames.append(.{
+                        .base = frames.items[frames.items.len - 1].base + b,
+                        .ret_addr = instructions.buffer + 1,
+                    });
+                    instructions.buffer = @intToPtr([*]const u8, f);
+                },
+
+                .ret => {
+                    instructions.buffer = frames.items[frames.items.len - 1].ret_addr;
+                    _ = frames.pop();
                 },
 
                 else => unreachable,

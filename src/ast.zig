@@ -63,7 +63,9 @@ pub const Ast = struct {
 
     pub fn fn_proto(ast: Ast, node: Node) FnProto {
         std.debug.assert(node.symbol == .fn_proto);
-        const size = node.r * 2;
+        // .l = data(retty_nodi, {param_lexi, type_nodi})
+        // .r = param_count
+        const size = node.r * 2; // each param has a lexi and a type
         return FnProto {
             .name = ast.lexeme_str(node),
             .return_expr = ast.data[node.l],

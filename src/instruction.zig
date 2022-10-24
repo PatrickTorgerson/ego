@@ -12,7 +12,7 @@ const Log2Int = std.math.Log2Int;
 pub const Opcode = enum(u8) {
     padding,
 
-    const64,
+    const64, // ods: d = kst(s)
 
     // -- arithmatic
     addi, // odlr: d = l + r
@@ -36,25 +36,32 @@ pub const Opcode = enum(u8) {
     // cmpi, cmpf,
     // eq, ne, lt, le, tru, fls,
     // jmp, jeq, jne, jlt, jle,
-    // call, tcall,
-    // ret,
+
+    call,
+    ret,
 };
 
 pub const InstructionBuffer = struct {
-    buffer: []const u8,
+    buffer: [*]const u8,
 
     pub fn read_op(this: *InstructionBuffer) Opcode {
         while(this.buffer[0] == 0) // padding
-            this.buffer = this.buffer[1..];
+            this.buffer += 1;
         const op = this.buffer[0];
-        this.buffer = this.buffer[1..];
+        this.buffer += 1;
         return @intToEnum(Opcode, op);
     }
 
     pub fn read(this: *InstructionBuffer, comptime T: type) T
     {
-        const data = @ptrCast(*const T, @alignCast(@alignOf(T), this.buffer.ptr)).*;
-        this.buffer = this.buffer[@sizeOf(T)..];
+        //const data = @ptrCast(*const T, @alignCast(@alignOf(T), this.buffer)).*;
+        //this.buffer = this.buffer[@sizeOf(T)..];
+        const slice: []const u8 = .{
+            .ptr = this.buffer,
+            .len = @sizeOf(T),
+        };
+        const data = std.mem.bytesToValue(T, slice);
+        this.buffer += @sizeOf(T);
         return data;
     }
 };

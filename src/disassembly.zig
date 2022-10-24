@@ -79,6 +79,9 @@ pub fn disassemble_ins(writer: anytype, code: CodePage, offset: usize, tytable: 
             size += 4;
         },
 
+        .call => {},
+        .ret => {},
+
         .padding => return error.oh_shit_boi,
     }
 
