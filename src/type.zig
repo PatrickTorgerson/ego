@@ -72,7 +72,7 @@ pub const TypeTable = struct {
         switch(this.types.items[tid]) {
             .int, .float => return 8,
             .bool => return 1,
-            .nil => return 0,
+            else => return 0,
         }
     }
 

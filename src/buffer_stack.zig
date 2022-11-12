@@ -12,14 +12,14 @@ pub const BufferStack = struct {
 
     buff: std.ArrayList(u8),
 
-    /// must deinit with BufferStack(T).deinit()
+    /// must deinit with BufferStack.deinit()
     pub fn init(allocator: std.mem.Allocator) This {
         return This {
             .buff = std.ArrayList(u8).init(allocator),
         };
     }
 
-    /// capacity in bytes, must deinit with BufferStack(T).deinit()
+    /// capacity in bytes, must deinit with BufferStack.deinit()
     pub fn init_capacity(allocator: std.mem.Allocator, capacity: usize) !This {
         return This {
             .buff = std.ArrayList(u8).initCapacity(allocator, capacity),
@@ -73,7 +73,7 @@ pub const MappedBufferStack = struct {
     buff: BufferStack,
     map: std.ArrayList(Entry),
 
-    /// must deinit with BufferStack(T).deinit()
+    /// must deinit with MappedBufferStack.deinit()
     pub fn init(allocator: std.mem.Allocator) This {
         return This {
             .buff = BufferStack.init(allocator),
@@ -81,7 +81,7 @@ pub const MappedBufferStack = struct {
         };
     }
 
-    /// capacity in bytes, must deinit with BufferStack(T).deinit()
+    /// capacity in bytes, must deinit with MappedBufferStack.deinit()
     pub fn init_capacity(allocator: std.mem.Allocator, capacity: usize) !This {
         return This {
             .buff = BufferStack.init_capacity(allocator, capacity),

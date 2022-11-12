@@ -6,14 +6,14 @@
 
 
 const std = @import("std");
-const pkg = std.build.Pkg;
+const Pkg = std.build.Pkg;
 
 
 // ********************************************************************************
-const ego = pkg{
+const ego = Pkg{
     .name = "ego",
-    .path = .{ .path = "src/ego.zig" },
-    .dependencies = &[_]pkg{},
+    .source = .{ .path = "src/ego.zig" },
+    .dependencies = &[_]Pkg{},
 };
 
 
@@ -58,7 +58,7 @@ pub fn build(b: *std.build.Builder) void
     // -- tests
 
     const test_step = b.step("test", "Run tests");
-    const tests = b.addTest(ego.path.path);
+    const tests = b.addTest(ego.source.path);
     tests.setBuildMode(mode);
     test_step.dependOn(&tests.step);
 

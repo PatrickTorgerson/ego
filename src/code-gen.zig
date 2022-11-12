@@ -109,10 +109,10 @@ pub fn gen_code(allocator: std.mem.Allocator, ast: Ast, tytable: *TypeTable) !Co
             .gen_call => {
                 const fni = gen.node_stack.pop();
                 const b = gen.node_stack.pop();
-                gen.write_op(.call, 8);
-                try calls.append(gen.ins_buffer.len);
-                gen.write(usize, gen.funcs.items[fni].offset);
-                gen.write(u16, @intCast(u16, b));
+                try gen.write_op(.call, 8);
+                try calls.append(gen.ins_buffer.items.len);
+                try gen.write(usize, gen.funcs.items[fni].offset);
+                try gen.write(u16, @intCast(u16, b));
             },
         }
 
@@ -121,9 +121,10 @@ pub fn gen_code(allocator: std.mem.Allocator, ast: Ast, tytable: *TypeTable) !Co
     std.debug.print("\n", .{});
 
     for(calls.items) |call| {
-        const offset = std.mem.bytesToValue(usize, gen.ins_buffer.items[call..call + 8]);
+        const slice = gen.ins_buffer.items[call..];
+        const offset = std.mem.bytesToValue(usize, slice[0..8]);
         const ptr = @ptrToInt(gen.ins_buffer.items.ptr + offset);
-        std.mem.writeIntSlice(usize, gen.ins_buffer.items[call..call + 8], ptr);
+        std.mem.writeIntSliceNative(usize, gen.ins_buffer.items[call..call + 8], ptr);
     }
 
     return CodePage {
@@ -226,7 +227,7 @@ const Gen = struct {
                     else {
                         const tid = gen.init_type(gen.ast.nodes.get(proto.params[1])).?;
                         const size = gen.type_table.sizeof(tid).?;
-                        break :blk std.mem.max(usize, [_]usize{ret_size, size});
+                        break :blk std.mem.max(usize, &[_]usize{ret_size, size});
                     }
                 };
 
@@ -257,14 +258,14 @@ const Gen = struct {
                         break i;
                 } else unreachable; // TODO error: calling function that doesn't exist
 
-                gen.top += gen.padding(gen.top, gen.funcs.items[fni].stack_alignment);
+                gen.top += padding(gen.top, gen.funcs.items[fni].stack_alignment);
 
                 try gen.node_stack.append(gen.top);
                 try gen.node_stack.append(fni);
                 try gen.state_stack.append(.gen_call);
 
                 const args = gen.ast.range(node.r);
-                const iter = ReverseIter(Ast.Index).init(args);
+                var iter = ReverseIter(Ast.Index).init(args);
                 while(iter.next()) |arg_node| {
                     try gen.node_stack.append(arg_node);
                     try gen.state_stack.append(.param_init); // will mark value as non-temp
@@ -476,12 +477,14 @@ const Gen = struct {
                     break :blk Type{ .float = {} };
                 if(eql(u8, str, "bool"))
                     break :blk Type{ .bool = {} };
+
+                unreachable;
             },
 
             .literal_string => unreachable,
             .type_expr => unreachable,
 
-            else => null,
+            else => unreachable,
         };
 
         return gen.type_table.add_type(ty) catch null;
@@ -528,7 +531,7 @@ const Gen = struct {
 
     /// detemines number of padding bytes required to align `offset`
     /// with `alignment`
-    fn padding(offset: usize, alignment: usize) usize
+    pub fn padding(offset: usize, alignment: usize) usize
     {
         const mod = offset % alignment;
         if(mod == 0) return 0
@@ -540,11 +543,13 @@ const Gen = struct {
         next_top_decl,
         node,
         var_init,
+        param_init,
 
         gen_add,
         gen_sub,
         gen_mul,
         gen_div,
+        gen_call,
 
         pub fn init_gen_binop(sym: Symbol) ?Gen.State {
             return switch(sym) {

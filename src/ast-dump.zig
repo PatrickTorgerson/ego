@@ -53,12 +53,15 @@ pub fn dump(ast: Ast) !void {
     out.indents.ptr = &out.indent_buffer;
     out.indents.len = 0;
 
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const ally = gpa.allocator();
+
     // stack of nodes to be dumped
-    var nodes = std.ArrayList(Ast.Index).init(std.testing.allocator);
+    var nodes = std.ArrayList(Ast.Index).init(ally);
     defer nodes.deinit();
 
     // stack of lexis to be dumped by `try nodes.append(lexi_stack_top);`
-    var lexi_stack = std.ArrayList(Ast.Index).init(std.testing.allocator);
+    var lexi_stack = std.ArrayList(Ast.Index).init(ally);
     defer lexi_stack.deinit();
 
     // append top level decl nodes
@@ -268,6 +271,4 @@ pub fn dump(ast: Ast) !void {
 
         out.line();
     }
-
-    _ = ast;
 }
