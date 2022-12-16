@@ -157,28 +157,3 @@ pub const Vm = struct {
         };
     }
 };
-
-test "vm" {
-    var egovm = Vm{};
-    var stack : [100*8]u8 = undefined;
-    var kst : [100*8]u8 = undefined;
-
-    var program align(16) = [_]u8{
-        0, @enumToInt(Opcode.const64), 0,0, 0,0,
-        0, @enumToInt(Opcode.const64), 1,0, 1,0,
-        0, @enumToInt(Opcode.addi), 3,0, 0,0, 1,0,
-        0, @enumToInt(Opcode.muli), 3,0, 3,0, 1,0,
-        0, @enumToInt(Opcode.mov64), 4,0, 3,0,
-    };
-
-    egovm.stack = stack[0..];
-    egovm.kst = kst[0..];
-
-    egovm.setk(i64, 0, 13);
-    egovm.setk(i64, 1, 2);
-
-    var instructions = InstructionBuffer{ .buffer = program[0..] };
-    try egovm.execute(&instructions);
-
-    try std.testing.expectEqual(@as(i64, 30), @ptrCast(*i64, @alignCast(@alignOf(*i64), &stack[4*8])).*);
-}

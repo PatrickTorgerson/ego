@@ -4,18 +4,14 @@
 //! ego uses the MIT license, see LICENSE for more information
 // ********************************************************************************
 
-// ********************************************************************************
-/// non-terminal symbols in the ego grammar, exhaustive list of node types
+///-------------------------------------------------------------------
+///  non-terminal symbols in the ego grammar,
+///  exhaustive list of node types
+///
 pub const Symbol = enum(i32) {
-    file,
+    @"<ERR>",
+    module,
     var_decl,
-    fn_call,
-    fn_decl,
-    fn_proto,
-    name,
-    type_expr,
-    identifier,
-    ret,
 
     // literals
     // NOTE: order is important here, see Symbol.init_literal()
@@ -30,7 +26,7 @@ pub const Symbol = enum(i32) {
     literal_string,
 
     // binary operators
-    // NOTE: order is important here, see Symbol.init_binop()
+    // NOTE: order is important here, see Symbol.init_binop(), and is_binop()
     add,
     sub,
     mul,
@@ -49,28 +45,40 @@ pub const Symbol = enum(i32) {
     bool_and,
     bool_or,
 
-    eof,
-
-    pub fn init_literal(l: Terminal) ?Symbol {
+    pub fn init_literal(t: Terminal) ?Symbol {
         const diff = @enumToInt(Symbol.literal_int) - @enumToInt(Terminal.literal_int);
-        const i = @enumToInt(l);
+        const i = @enumToInt(t);
         if (i >= @enumToInt(Terminal.literal_int) and i <= @enumToInt(Terminal.literal_string)) {
             return @intToEnum(Symbol, i + diff);
         } else return null;
     }
 
-    pub fn init_binop(l: Terminal) ?Symbol {
+    pub fn init_binop(t: Terminal) ?Symbol {
         const diff = @enumToInt(Symbol.add) - @enumToInt(Terminal.plus);
-        const i = @enumToInt(l);
+        const i = @enumToInt(t);
         if (i >= @enumToInt(Terminal.plus) and i <= @enumToInt(Terminal.ky_or)) {
             return @intToEnum(Symbol, i + diff);
         } else return null;
     }
+
+    pub fn is_binop(sym: Symbol) bool {
+        const i = @enumToInt(sym);
+        return i >= @enumToInt(Symbol.add) and i <= @enumToInt(Symbol.bool_or);
+    }
+
+    pub fn is_literal(sym: Symbol) bool {
+        const i = @enumToInt(sym);
+        return i >= @enumToInt(Symbol.literal_int) and i <= @enumToInt(Symbol.literal_string);
+    }
 };
 
-// ********************************************************************************
-/// terminal symbols in the ego grammar, exhaustive list of lexeme types
+///-------------------------------------------------------------------
+///  terminal symbols in the ego grammar,
+///  exhaustive list of lexeme types
+///
 pub const Terminal = enum(i32) {
+    @"<ERR>" = -1,
+
     // binary operators
     // NOTE: order is important here, see Symbol.init_binop()
     // NOTE: also important for parse.precedence()
@@ -100,9 +108,7 @@ pub const Terminal = enum(i32) {
     minus_equal,
     star_equal,
     slash_equal,
-
     identifier,
-
     ky_var,
     ky_const,
     ky_fn,
@@ -122,16 +128,7 @@ pub const Terminal = enum(i32) {
     ky_namespace,
     ky_pub,
     ky_error,
-    ky_catch,
-    ky_try,
-
-    ky_any,
-    ky_bool,
-    ky_int,
-    ky_float,
-    ky_string,
-    ky_list,
-    ky_map,
+    ky_end,
 
     // literals
     // NOTE: order is important here, see Symbol.init_literal()
@@ -158,11 +155,50 @@ pub const Terminal = enum(i32) {
     period,
     question_mark,
     ampersand,
-
+    newline,
     indent,
     unindent,
-    newline,
-
+    comment,
     eof,
-    invalid,
+
+    invalid_unexpected_char,
+    invalid_lonely_carriage_return,
+    invalid_mixed_indentation,
+    invalid_leading_zero,
+    invalid_decimal_digit,
+    invalid_repeated_digit_seperator,
+    invalid_period_following_digit_seperator,
+    invalid_extra_period_in_float,
+};
+
+//===========================================================
+//  node structures
+//===========================================================
+
+pub const LexemeIndex = usize;
+pub const NodeIndex = usize;
+pub const DataIndex = usize;
+
+///-----------------------------------------------------
+///  layout for .module node
+///
+pub const ModuleNode = struct {
+    top_decls: []NodeIndex,
+};
+
+///-----------------------------------------------------
+///  layout for .var_decl node
+///
+pub const VarDeclNode = struct {
+    identifiers: []LexemeIndex,
+    initializers: []NodeIndex,
+};
+
+///-----------------------------------------------------
+///  layout for a binary op node
+///
+pub const BinaryOpNode = struct {
+    op: Symbol,
+    lhs: NodeIndex,
+    rhs: NodeIndex,
 };

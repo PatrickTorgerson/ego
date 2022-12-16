@@ -4,88 +4,145 @@
 //! ego uses the MIT license, see LICENSE for more information
 // ********************************************************************************
 
-
 const std = @import("std");
 const ego = @import("ego");
 
-const dump = ego.dump.dump;
-
-const src =
-    \\  fn squared(n int) int
-    \\      return n * n
-    \\
-    \\  fn main() void
-    \\    const n, n2 = 20, squared(n)
+const default_src: []const u8 =
+\\  const a = 1 ; const b,c,d,e = 9,8,7,6
 ;
 
 pub fn main() !void
 {
-    std.debug.print("\n====================== source ======================\n\n", .{});
-    std.debug.print("{s}\n", .{src});
-    std.debug.print("\n====================== lexing ======================\n\n", .{});
-
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const ally = gpa.allocator();
+    defer _ = gpa.deinit();
+    var allocator = gpa.allocator();
 
-    var lexer = ego.Lexer.init(src);
-    var lexeme = lexer.next();
-
-    while(lexeme.ty != .eof):(lexeme = lexer.next())
-    {
-        std.debug.print("{s:20} : '{s}'\n", .{@tagName(lexeme.ty), lexer.string(lexeme)});
+    var src: []const u8 = default_src;
+    var deinit_src = false;
+    defer {
+        // src only need freed if read from disk, -i
+        if (deinit_src)
+            allocator.free(src);
     }
 
-    std.debug.print("\n===================== parsing =======================\n\n", .{});
+    var out = std.io.getStdOut().writer();
+    var args = try std.process.argsWithAllocator(allocator);
+    defer args.deinit();
+    _ = args.next(); // exe path
+    var out_file: ?std.fs.File = null;
+    defer if (out_file) |file| file.close();
 
-    var ast = try ego.parse.parse(ally, src);
-    defer ast.deinit(ally);
+    var trace_parse = false;
+    var dump_ast = false;
 
-    std.debug.print("nodes : {}\n", .{ast.nodes.len});
-
-    std.debug.print("\n====================== AST ======================\n\n", .{});
-
-    if(ast.diagnostics.len > 0)
-    {
-        for(ast.diagnostics) |d|
-        {
-            std.debug.print("{s}",.{@tagName(d.tag)});
-            if(d.tag == .expected_lexeme)
-            { std.debug.print(": {s}", .{@tagName(d.expected.?)}); }
-            std.debug.print(" at '{s}'\n",.{ast.lexeme_str_lexi(d.lexeme)});
+    // parse command line
+    //  '-i': input file
+    //  '-o': output file, omit for stdout
+    //  '-io': file to be used as both input and output
+    //  p: trace parse
+    //  a: dump AST
+    while (args.next()) |arg| {
+        if (std.mem.eql(u8, arg, "-o")) {
+            if (args.next()) |out_path| {
+                out_file = try set_output(allocator, out_path);
+                out = out_file.?.writer();
+            }
+            else { std.debug.print("expected output file", .{}); return; }
         }
-        return;
+        else if (std.mem.eql(u8, arg, "-i")) {
+            if (args.next()) |src_path| {
+                src = try set_input(allocator, src_path);
+                deinit_src = true;
+            }
+            else { std.debug.print("expected input file", .{}); return; }
+        }
+        else if (std.mem.eql(u8, arg, "-io") or std.mem.eql(u8, arg, "-oi")) {
+            if (args.next()) |io_path| {
+                src = try set_input(allocator, io_path);
+                deinit_src = true;
+                out_file = try set_output(allocator, io_path);
+                out = out_file.?.writer();
+            }
+            else { std.debug.print("expected input file", .{}); return; }
+        }
+        else {
+            for (arg) |c| {
+                switch (c) {
+                    'p' => trace_parse = true,
+                    'a' => dump_ast = true,
+                    else => {},
+                }
+            }
+        }
     }
 
-    try dump(ast);
+    // set up debug trace
+    ego.debugtrace.set_out_writer(ego.util.GenericWriter.init(&out));
+    try ego.debugtrace.init_buffer(allocator, 128);
+    defer ego.debugtrace.deinit_buffer();
+    defer ego.debugtrace.flush() catch {};
 
-    std.debug.print("\n====================== code gen ======================\n\n", .{});
+    try header(out, "source");
+    try dump_source(out, src);
 
-    var tytable = ego.TypeTable.init(ally);
-    defer tytable.deinit();
+    if (trace_parse) {
+        try header(out, "parser debug trace");
+        ego.debugtrace.set_out_writer(ego.util.GenericWriter.init(&out));
+    } else ego.debugtrace.clear_out_writer();
 
-    const code = try ego.codegen.gen_code(ally, ast, &tytable);
+    var tree = try ego.parse.parse(allocator, src);
+    defer tree.deinit(allocator);
+    try ego.debugtrace.flush();
 
-    std.debug.print("code size : {}bytes\n", .{code.buffer.len});
+    if (dump_ast) {
+        try header(out, "parse tree");
+        ego.debugtrace.set_out_writer(ego.util.GenericWriter.init(&out));
+        try tree.dump(allocator, out, .{
+            .indent_prefix = "// ",
+        });
+    }
+}
 
-    std.debug.print("\n==================== disassembly ========================\n\n", .{});
+///
+fn set_input(allocator: std.mem.Allocator, path: []const u8) ![]const u8 {
+    var file = try std.fs.cwd().openFile(path, .{});
+    defer file.close();
+    return try file.reader().readAllAlloc(allocator, ~@as(usize, 0));
+}
 
-    const out = std.io.getStdOut().writer();
-    try ego.disassemble(out, code, tytable);
+///
+fn set_output(allocator: std.mem.Allocator, path: []const u8) !std.fs.File {
+    const absolute = try std.fs.path.resolve(allocator, &[_][]const u8{path});
+    defer allocator.free(absolute);
+    std.debug.print("dumping to '{s}'\n", .{absolute});
+    _ = try std.fs.createFileAbsolute(absolute, .{});
+    var file = try std.fs.openFileAbsolute(absolute, .{ .mode = .read_write });
+    return file;
+}
 
-//     std.debug.print("\n====================== result ======================\n\n", .{});
-//
-//     var vm = ego.Vm{};
-//     var stack: [256]u8 = undefined;
-//     vm.kst = code.kst;
-//     vm.stack = stack[0..];
-//
-//     var instructions = ego.InstructionBuffer{
-//         .buffer = code.buffer[code.funcs[0].offset .. ]
-//     };
-//
-//     try vm.execute(&instructions);
+/// dumps source to out ommiting comments
+fn dump_source(out: anytype, src: []const u8) !void {
+    var comment = false;
+    for (src) |c,i| {
+        if (comment) {
+            if(c == '\n')
+                comment = false;
+        }
+        else if (c == '/') {
+            if (i+1 < src.len and src[i+1] == '/')
+                comment = true;
+        }
+        else if (c == '\n' and i+1 < src.len and src[i+1] == '\n') {}
+        else {
+            try out.writeByte(c);
+        }
+    }
+    try out.writeByte('\n');
+}
 
-    // std.debug.print(" r = {d}\n", .{std.mem.bytesAsValue(f64, stack[8..16]).*});
-    // std.debug.print(" d = {d}\n", .{std.mem.bytesAsValue(f64, stack[16..24]).*});
-    // std.debug.print(" area = {d}\n", .{std.mem.bytesAsValue(f64, stack[24..32]).*});
+fn header(out: anytype, str: []const u8) !void {
+    try out.writeAll("//\n");
+    try out.writeAll("//--------------------------------------------------------\n//  ");
+    try out.writeAll(str);
+    try out.writeAll("\n//--------------------------------------------------------\n//\n");
 }
