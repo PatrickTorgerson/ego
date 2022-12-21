@@ -21,11 +21,12 @@ const DataIndex = ParseTree.DataIndex;
 const State = Parser.State;
 
 ///----------------------------------------------------------------------
-///  Generate an AST from ego source
+///  generate an AST from ego source
 ///
 pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
 
     // -- lexing
+
     var lexemes: std.MultiArrayList(Lexeme) = .{};
     try lexemes.ensureTotalCapacity(allocator, source.len / 8);
     try lexemes.append(allocator, .{.terminal = .@"<ERR>", .str = "<ERR>"}); // dummy <ERR> lexeme
@@ -91,7 +92,7 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
     // main parsing loop
     while (true) {
         const state = parser.pop_state();
-        debugtrace.print("// | {s: ^20} '{s}' ", .{@tagName(state), parser.lex_strs[parser.lexi]});
+        debugtrace.print("//~ | {s: ^20} '{s}' ", .{@tagName(state), parser.lex_strs[parser.lexi]});
 
         // TODO: check invalid terminals ??
         switch (state) {
@@ -471,16 +472,16 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
     try parser.data.append(allocator, parser.work_stack.items.len); // top decl count
     try parser.data.appendSlice(allocator, parser.work_stack.items[0..]); // top decl nodi's
 
-    debugtrace.print("\n//====== end capacities ======\n", .{});
-    debugtrace.print("//-> state_stack: {}\n", .{parser.state_stack.capacity});
-    debugtrace.print("//-> work_stack: {}\n", .{parser.work_stack.capacity});
-    debugtrace.print("//-> counts: {}\n", .{parser.counts.capacity});
-    debugtrace.print("//-> indent_stack: {}\n", .{parser.indent_stack.capacity});
-    debugtrace.print("//-> nodes: {}\n", .{parser.nodes.capacity});
-    debugtrace.print("//-> data: {}\n", .{parser.data.capacity});
-    debugtrace.print("// = node count: {}\n", .{parser.nodes.len});
-    debugtrace.print("// = lexeme count: {}\n", .{lexemes.len});
-    debugtrace.print("// = source length: {}\n", .{source.len});
+    debugtrace.print("\n//~====== end capacities ======\n", .{});
+    debugtrace.print("//~> state_stack: {}\n", .{parser.state_stack.capacity});
+    debugtrace.print("//~> work_stack: {}\n", .{parser.work_stack.capacity});
+    debugtrace.print("//~> counts: {}\n", .{parser.counts.capacity});
+    debugtrace.print("//~> indent_stack: {}\n", .{parser.indent_stack.capacity});
+    debugtrace.print("//~> nodes: {}\n", .{parser.nodes.capacity});
+    debugtrace.print("//~> data: {}\n", .{parser.data.capacity});
+    debugtrace.print("//~ = node count: {}\n", .{parser.nodes.len});
+    debugtrace.print("//~ = lexeme count: {}\n", .{lexemes.len});
+    debugtrace.print("//~ = source length: {}\n", .{source.len});
 
     return ParseTree{
         .nodes = parser.nodes.slice(),

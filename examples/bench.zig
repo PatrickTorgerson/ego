@@ -98,7 +98,7 @@ pub fn main() !void
         try header(out, "parse tree");
         ego.debugtrace.set_out_writer(ego.util.GenericWriter.init(&out));
         try tree.dump(allocator, out, .{
-            .indent_prefix = "// ",
+            .indent_prefix = "//~ ",
         });
     }
 }
@@ -120,7 +120,7 @@ fn set_output(allocator: std.mem.Allocator, path: []const u8) !std.fs.File {
     return file;
 }
 
-/// dumps source to out ommiting comments
+/// dumps source to out ommiting prev dumps
 fn dump_source(out: anytype, src: []const u8) !void {
     var comment = false;
     for (src) |c,i| {
@@ -129,20 +129,20 @@ fn dump_source(out: anytype, src: []const u8) !void {
                 comment = false;
         }
         else if (c == '/') {
-            if (i+1 < src.len and src[i+1] == '/')
-                comment = true;
+            if (i+2 < src.len and src[i+1] == '/' and src[i+2] == '~')
+                comment = true
+            else try out.writeByte(c);
         }
-        else if (c == '\n' and i+1 < src.len and src[i+1] == '\n') {}
         else {
             try out.writeByte(c);
         }
     }
-    try out.writeByte('\n');
 }
 
+/// print header
 fn header(out: anytype, str: []const u8) !void {
-    try out.writeAll("//\n");
-    try out.writeAll("//--------------------------------------------------------\n//  ");
+    try out.writeAll("//~\n");
+    try out.writeAll("//~--------------------------------------------------------\n//~  ");
     try out.writeAll(str);
-    try out.writeAll("\n//--------------------------------------------------------\n//\n");
+    try out.writeAll("\n//~--------------------------------------------------------\n//~\n");
 }
