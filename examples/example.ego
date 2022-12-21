@@ -4,17 +4,59 @@
 //~--------------------------------------------------------
 //~
 
-const value = 1 + 3 + 2
+const a = i32: 1 + 1 * 2
 
+//~
+//~--------------------------------------------------------
+//~  parser debug trace
+//~--------------------------------------------------------
+//~
+//~ |    more_top_decl     ''
+//~ |       top_decl       'const'
+//~ |       var_decl       'const'
+//~ |   identifier_list    'a'
+//~ | identifier_list_cont '='
+//~ |     expect_equal     '='
+//~ |      expr_list       'i32'
+//~ |      expression      'i32'
+//~ |      expression      '1'
+//~ |      expr_cont       '+'
+//~ |      expression      '1'
+//~ |      expr_cont       '*'
+//~ |      expression      '2'
+//~ |      expr_cont       ''
+//~ |  create_binop_node   '' : mul literal_int literal_int
+//~ |      expr_cont       ''
+//~ |  create_binop_node   '' : add literal_int mul
+//~ |      expr_cont       ''
+//~ | create_typed_expr_node '' : i32
+//~ |      expr_cont       ''
+//~ |    expr_list_cont    ''
+//~ | create_var_decl_node '' : a
+//~ |   chained_var_decl   ''
+//~ |      terminator      ''
+//~ |    more_top_decl     ''
+//~ |         eof          '<EOF>'
+//~====== end capacities ======
+//~> state_stack: 20
+//~> work_stack: 20
+//~> counts: 8
+//~> indent_stack: 8
+//~> nodes: 20
+//~> data: 20
+//~ = node count: 9
+//~ = lexeme count: 133
+//~ = source length: 1777
 //~
 //~--------------------------------------------------------
 //~  parse tree
 //~--------------------------------------------------------
 //~
 //~ module
-//~  |- var_decl: value
-//~  |   |- add
+//~  |- var_decl: a
+//~  |   |- typed_expr: i32
 //~  |   |   |- add
 //~  |   |   |   |- literal_int: 1
-//~  |   |   |   |- literal_int: 3
-//~  |   |   |- literal_int: 2
+//~  |   |   |   |- mul
+//~  |   |   |   |   |- literal_int: 1
+//~  |   |   |   |   |- literal_int: 2

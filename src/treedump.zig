@@ -70,6 +70,11 @@ pub const ParseTreeIterator = struct {
                 while (iter.next()) |nodi|
                     try self.push(nodi, top.depth + 1);
             },
+            .typed_expr => {
+                // typed_expr offset field stores expr nodi
+                const data = self.tree.nodes.items(.offset)[top.nodi];
+                try self.push(data, top.depth + 1);
+            },
             .add,
             .sub,
             .mul,
@@ -180,6 +185,7 @@ pub fn dump(allocator: std.mem.Allocator, out_writer: anytype, tree: ParseTree, 
             .bool_or => {
                 // no op
             },
+            .typed_expr,
             .literal_int,
             .literal_float,
             .literal_hex,

@@ -591,7 +591,22 @@ const keywords = std.ComptimeStringMap(Terminal, .{
     .{ "true", .literal_true },
     .{ "false", .literal_false },
     .{ "nil", .literal_nil },
+    .{ "u8", .primitive },
+    .{ "u16", .primitive },
+    .{ "u32", .primitive },
+    .{ "u64", .primitive },
+    .{ "u128", .primitive },
+    .{ "i8", .primitive },
+    .{ "i32", .primitive },
+    .{ "i64", .primitive },
+    .{ "i128", .primitive },
+    .{ "f16", .primitive },
+    .{ "f32", .primitive },
+    .{ "f64", .primitive },
+    .{ "f128", .primitive },
+    .{ "bool", .primitive },
 });
+
 
 ///----------------------------------------------------------------------
 ///  returns keyword terminal is string is a keyword, null otherwise
@@ -649,9 +664,9 @@ test "lex basic function" {
     try std.testing.expectEqual(Terminal.identifier, lxr.next().?.terminal);
     try std.testing.expectEqual(Terminal.lparen, lxr.next().?.terminal);
     try std.testing.expectEqual(Terminal.identifier, lxr.next().?.terminal);
-    try std.testing.expectEqual(Terminal.identifier, lxr.next().?.terminal);
+    try std.testing.expectEqual(Terminal.primitive, lxr.next().?.terminal);
     try std.testing.expectEqual(Terminal.rparen, lxr.next().?.terminal);
-    try std.testing.expectEqual(Terminal.identifier, lxr.next().?.terminal);
+    try std.testing.expectEqual(Terminal.primitive, lxr.next().?.terminal);
     try std.testing.expectEqual(Terminal.indent, lxr.next().?.terminal);
     try std.testing.expectEqual(Terminal.ky_return, lxr.next().?.terminal);
     try std.testing.expectEqual(Terminal.identifier, lxr.next().?.terminal);
@@ -823,11 +838,24 @@ test "lex extra period in float" {
     try std.testing.expectEqual(lxr.next(), null);
 }
 
-test "comment" {
+test "lex comment" {
     var lxr = Lexer.init("// much content\n");
 
     try std.testing.expectEqual(Terminal.comment, lxr.next().?.terminal);
     try std.testing.expectEqual(Terminal.newline, lxr.next().?.terminal);
+    try std.testing.expectEqual(Terminal.eof, lxr.next().?.terminal);
+    try std.testing.expectEqual(lxr.next(), null);
+}
+
+test "lex keywords" {
+    var lxr = Lexer.init("if for true i32 f16 bool");
+
+    try std.testing.expectEqual(Terminal.ky_if, lxr.next().?.terminal);
+    try std.testing.expectEqual(Terminal.ky_for, lxr.next().?.terminal);
+    try std.testing.expectEqual(Terminal.literal_true, lxr.next().?.terminal);
+    try std.testing.expectEqual(Terminal.primitive, lxr.next().?.terminal);
+    try std.testing.expectEqual(Terminal.primitive, lxr.next().?.terminal);
+    try std.testing.expectEqual(Terminal.primitive, lxr.next().?.terminal);
     try std.testing.expectEqual(Terminal.eof, lxr.next().?.terminal);
     try std.testing.expectEqual(lxr.next(), null);
 }

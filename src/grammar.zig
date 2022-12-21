@@ -12,6 +12,7 @@ pub const Symbol = enum(i32) {
     @"<ERR>",
     module,
     var_decl,
+    typed_expr,
 
     // literals
     // NOTE: order is important here, see Symbol.init_literal()
@@ -108,7 +109,10 @@ pub const Terminal = enum(i32) {
     minus_equal,
     star_equal,
     slash_equal,
+
     identifier,
+    primitive,
+
     ky_var,
     ky_const,
     ky_fn,

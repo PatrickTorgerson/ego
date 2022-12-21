@@ -233,6 +233,7 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
                     .lparen,
                     .identifier,
                     .colon_colon,
+                    .primitive,
                     => {
                         try parser.append_states(.{.expression, .expr_list_cont});
                         try parser.new_count();
@@ -269,7 +270,9 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
             // => .unary_expr, .expr_cont
             // => LITERAL, .expr_cont
             // => LPAREN, .expression, .close_paren, .expr_cont
-            // => .name, .possibly_fn_call, .expr_cont
+            // => PRIMITIVE, COLON, .expression
+            // => PRIMITIVE, COLON, INDENT, .expression, UNINDENT
+            // => TODO: .name, .possibly_fn_call, .expr_cont
             .expression => {
                 try parser.state_stack.append(allocator, .expr_cont);
                 switch (parser.lexeme()) {
@@ -306,6 +309,16 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
                         parser.advance();
                         try parser.push(prec); // store precedence to recover later
                         prec = 0;
+                    },
+
+                    .primitive => {
+                        try parser.push(parser.lexi); // primitive lexi
+                        parser.advance();
+                        if (parser.consume(.colon)) |_| {}
+                        else try parser.diag_expected(.colon); // TODO: recover
+                        if (parser.consume(.indent)) |_|
+                            try parser.state_stack.append(allocator, .expect_unindent);
+                        try parser.append_states(.{.expression, .create_typed_expr_node});
                     },
 
                     else => {
@@ -397,8 +410,31 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
                 }
             },
 
+            // => UNINDENT
+            .expect_unindent => {
+                if (parser.consume(.unindent)) |_| {}
+                else {
+                    try parser.diag_expected(.unindent);
+                    // TODO: recover
+                }
+            },
+
             //---------------------------------
             //  node creation
+
+            // work_stack: expr nodi, primitive lexi
+            .create_typed_expr_node => {
+                const expr_nodi = parser.pop();
+                const primitive_lexi = parser.pop();
+
+                try parser.push_node(.{
+                    .symbol = .typed_expr,
+                    .lexi = primitive_lexi,
+                    .offset = expr_nodi,
+                });
+
+                debugtrace.print(": {s}", .{parser.lex_strs[primitive_lexi]});
+            },
 
             // work_stack: rhs nodi, prec, lexi, lhs nodi
             .create_binop_node => {
@@ -756,7 +792,7 @@ const Parser = struct {
     }
 
     ///----------------------------------------------------------------------
-    /// enumerastion od parsing states
+    /// enumeration of parsing states
     ///
     pub const State = enum {
         top_decl,
@@ -771,46 +807,16 @@ const Parser = struct {
         expression,
         expr_cont,
         unary_expr,
+        typed_expr,
 
         close_paren,
         terminator,
+        expect_equal,
+        expect_unindent,
 
         create_binop_node,
+        create_typed_expr_node,
         create_var_decl_node,
-
-        // ===================bookmark ===============
-
-        fn_decl,
-        fn_proto,
-        param_list,
-        param_list_cont,
-        anon_block,
-        statement_line,
-        statement_line_cont,
-        statement_cont,
-        statement,
-        type_expr,
-        unary,
-        name,
-        namespace_resolution,
-        field_resolution,
-
-        assign_or_call,
-        possibly_fn_call,
-        top_decl_end,
-        statement_end,
-        block_end,
-        optional_type_expr,
-        expect_equal,
-        expect_rparen,
-        push_node_count,
-
-        create_name_node,
-        create_fn_proto_node,
-        create_fn_decl_node,
-        create_fn_call_node,
-        create_ret_node,
-        create_block_node,
 
         eof,
     };
@@ -857,7 +863,6 @@ test "parse var_decl" {
     var iter = try ParseTreeIterator.init(std.testing.allocator, &tree);
     defer iter.deinit();
 
-    try std.testing.expectEqual(@as(usize, 7), tree.nodes.len);
     try std.testing.expectEqual(Symbol.module, syms[(try iter.next()).?.nodi]);
     try std.testing.expectEqual(Symbol.var_decl, syms[(try iter.next()).?.nodi]);
     try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
@@ -875,7 +880,6 @@ test "parse chained var decl" {
     var iter = try ParseTreeIterator.init(std.testing.allocator, &tree);
     defer iter.deinit();
 
-    try std.testing.expectEqual(@as(usize, 7), tree.nodes.len);
     try std.testing.expectEqual(Symbol.module, syms[(try iter.next()).?.nodi]);
     try std.testing.expectEqual(Symbol.var_decl, syms[(try iter.next()).?.nodi]);
     try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
@@ -893,7 +897,6 @@ test "parse numeric expression" {
     var iter = try ParseTreeIterator.init(std.testing.allocator, &tree);
     defer iter.deinit();
 
-    try std.testing.expectEqual(@as(usize, 9), tree.nodes.len);
     try std.testing.expectEqual(Symbol.module, syms[(try iter.next()).?.nodi]);
     try std.testing.expectEqual(Symbol.var_decl, syms[(try iter.next()).?.nodi]);
     try std.testing.expectEqual(Symbol.add, syms[(try iter.next()).?.nodi]);
@@ -913,7 +916,6 @@ test "parse identifier list" {
     var iter = try ParseTreeIterator.init(std.testing.allocator, &tree);
     defer iter.deinit();
 
-    try std.testing.expectEqual(@as(usize, 3), tree.nodes.len);
     try std.testing.expectEqual(Symbol.module, syms[(try iter.next()).?.nodi]);
 
     const var_nodi = (try iter.next()).?.nodi;
@@ -935,12 +937,29 @@ test "parse expression list" {
     var iter = try ParseTreeIterator.init(std.testing.allocator, &tree);
     defer iter.deinit();
 
-    try std.testing.expectEqual(@as(usize, 7), tree.nodes.len);
     try std.testing.expectEqual(Symbol.module, syms[(try iter.next()).?.nodi]);
     try std.testing.expectEqual(Symbol.var_decl, syms[(try iter.next()).?.nodi]);
     try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
     try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
     try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(try iter.next(), null);
+}
+
+test "parse typed expr" {
+    var tree = try parse(std.testing.allocator, "const a = i32: 1 + 1 * 2\n");
+    defer tree.deinit(std.testing.allocator);
+    const syms = tree.nodes.items(.symbol);
+    var iter = try ParseTreeIterator.init(std.testing.allocator, &tree);
+    defer iter.deinit();
+
+    try std.testing.expectEqual(Symbol.module, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.var_decl, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.typed_expr, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.add, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.mul, syms[(try iter.next()).?.nodi]);
     try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
     try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
     try std.testing.expectEqual(try iter.next(), null);
