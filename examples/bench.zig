@@ -9,6 +9,7 @@ const ego = @import("ego");
 
 const default_src: []const u8 =
 \\  const a = 1 ; const b,c,d,e = 9,8,7,6
+\\
 ;
 
 pub fn main() !void
@@ -65,14 +66,46 @@ pub fn main() !void
             }
             else { std.debug.print("expected input file", .{}); return; }
         }
-        else {
-            for (arg) |c| {
+        else if (std.mem.eql(u8, arg, "--help")) {
+            const cout = std.io.getStdOut().writer();
+            try cout.writeAll("Usage\n");
+            try cout.writeAll("  bench [-i FILE] [-o FILE] [-io FILE | -oi FILE] [-a][-p]\n");
+            try cout.writeAll("Options\n");
+            try cout.writeAll("  -i   file used for source input\n");
+            try cout.writeAll("  -o   file used for output\n");
+            try cout.writeAll("  -a   output AST\n");
+            try cout.writeAll("  -p   output parse trace\n");
+            try cout.writeAll("Notes\n");
+            try cout.writeAll("  * if no input is specified uses a default source\n");
+            try cout.writeAll("  * if no output is specified uses stdout\n");
+            try cout.writeAll("  * if multiple inputs or outputs are specified, uses last occurrence\n");
+            try cout.writeAll("  * a file can be used as both input and output with '-io'\n");
+            try cout.writeAll("  * options can be combined, '-ap'\n");
+            return;
+        }
+        else if (arg.len >= 2 and arg[0] == '-' and arg[1] != '-') {
+            for (arg[1..]) |c| {
                 switch (c) {
                     'p' => trace_parse = true,
                     'a' => dump_ast = true,
-                    else => {},
+                    else => {
+                        const cout = std.io.getStdOut().writer();
+                        try cout.print(" unrecognized option '{c}'\n", .{c});
+                        try cout.writeAll("Usage\n");
+                        try cout.writeAll("  bench --help\n");
+                        try cout.writeAll("  bench [-i FILE] [-o FILE] [-io FILE | -oi FILE] [-a][-p]\n");
+                        return;
+                    },
                 }
             }
+        }
+        else {
+            const cout = std.io.getStdOut().writer();
+            try cout.print(" unrecognized option '{s}'\n", .{arg});
+            try cout.writeAll("Usage\n");
+            try cout.writeAll("  bench --help\n");
+            try cout.writeAll("  bench [-i FILE] [-o FILE] [-io FILE | -oi FILE] [-a][-p]\n");
+            return;
         }
     }
 

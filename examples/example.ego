@@ -11,32 +11,32 @@ const a = i32: 1 + 1 * 2
 //~  parser debug trace
 //~--------------------------------------------------------
 //~
-//~ |    more_top_decl     ''
-//~ |       top_decl       'const'
-//~ |       var_decl       'const'
-//~ |   identifier_list    'a'
-//~ | identifier_list_cont '='
-//~ |     expect_equal     '='
-//~ |      expr_list       'i32'
-//~ |      expression      'i32'
-//~ |      expression      '1'
-//~ |      expr_cont       '+'
-//~ |      expression      '1'
-//~ |      expr_cont       '*'
-//~ |      expression      '2'
-//~ |      expr_cont       ''
+//~ |    more_top_decl     '' 
+//~ |       top_decl       'const' 
+//~ |       var_decl       'const' 
+//~ |   identifier_list    'a' 
+//~ | identifier_list_cont '=' 
+//~ |     expect_equal     '=' 
+//~ |      expr_list       'i32' 
+//~ |      expression      'i32' 
+//~ |      expression      '1' 
+//~ |      expr_cont       '+' 
+//~ |      expression      '1' 
+//~ |      expr_cont       '*' 
+//~ |      expression      '2' 
+//~ |      expr_cont       '' 
 //~ |  create_binop_node   '' : mul literal_int literal_int
-//~ |      expr_cont       ''
+//~ |      expr_cont       '' 
 //~ |  create_binop_node   '' : add literal_int mul
-//~ |      expr_cont       ''
+//~ |      expr_cont       '' 
 //~ | create_typed_expr_node '' : i32
-//~ |      expr_cont       ''
-//~ |    expr_list_cont    ''
+//~ |      expr_cont       '' 
+//~ |    expr_list_cont    '' 
 //~ | create_var_decl_node '' : a
-//~ |   chained_var_decl   ''
-//~ |      terminator      ''
-//~ |    more_top_decl     ''
-//~ |         eof          '<EOF>'
+//~ |   chained_var_decl   '' 
+//~ |      terminator      '' 
+//~ |    more_top_decl     '' 
+//~ |         eof          '<EOF>' 
 //~====== end capacities ======
 //~> state_stack: 20
 //~> work_stack: 20
@@ -46,7 +46,7 @@ const a = i32: 1 + 1 * 2
 //~> data: 20
 //~ = node count: 9
 //~ = lexeme count: 133
-//~ = source length: 1777
+//~ = source length: 1782
 //~
 //~--------------------------------------------------------
 //~  parse tree

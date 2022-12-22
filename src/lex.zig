@@ -250,8 +250,8 @@ pub const Lexer = struct {
                     else => {
                         const width = lexer.pos - start;
                         lexeme.terminal =
-                            if (width == lexer.prev_indent or c == '\n' or c == '\r')
-                            .newline // empty lines are newlines
+                            if (width == lexer.prev_indent or c == '\n' or c == '\r' or c == 0)
+                            .newline // empty lines are newlines, not unindents
                         else if (width < lexer.prev_indent)
                             .unindent
                         else if (width > lexer.prev_indent)
