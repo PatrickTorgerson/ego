@@ -3,3 +3,4 @@ zig-out
 .vscode
 ego-tests/
 grammar.ebnf
+run-tokei.bat

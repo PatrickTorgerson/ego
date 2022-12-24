@@ -3,9 +3,8 @@
 [![License](https://img.shields.io/github/license/PatrickTorgerson/ego)](https://github.com/PatrickTorgerson/ego/blob/main/LICENSE)
 [![Last Commit](https://img.shields.io/github/last-commit/PatrickTorgerson/ego)](https://github.com/PatrickTorgerson/ego/commits/main)
 [![Code Size](https://img.shields.io/github/languages/code-size/PatrickTorgerson/ego)](https://github.com/PatrickTorgerson/ego)
-[![Code Size](https://img.shields.io/tokei/lines/github/PatrickTorgerson/ego)](https://github.com/PatrickTorgerson/ego)
 
-Small toy interpreted scripting language written in Zig
+Custom programming language for learning and for fun
 
 ## Example
 
