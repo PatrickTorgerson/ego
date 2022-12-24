@@ -4,59 +4,60 @@
 //~--------------------------------------------------------
 //~
 
-const a = i32: 1 + 1 * 2
+const a,b,c = i32:1 , i32:2 , i32:3
+const twelve = u8: 12
 
-//~
-//~--------------------------------------------------------
-//~  parser debug trace
-//~--------------------------------------------------------
-//~
-//~ |    more_top_decl     '' 
-//~ |       top_decl       'const' 
-//~ |       var_decl       'const' 
-//~ |   identifier_list    'a' 
-//~ | identifier_list_cont '=' 
-//~ |     expect_equal     '=' 
-//~ |      expr_list       'i32' 
-//~ |      expression      'i32' 
-//~ |      expression      '1' 
-//~ |      expr_cont       '+' 
-//~ |      expression      '1' 
-//~ |      expr_cont       '*' 
-//~ |      expression      '2' 
-//~ |      expr_cont       '' 
-//~ |  create_binop_node   '' : mul literal_int literal_int
-//~ |      expr_cont       '' 
-//~ |  create_binop_node   '' : add literal_int mul
-//~ |      expr_cont       '' 
-//~ | create_typed_expr_node '' : i32
-//~ |      expr_cont       '' 
-//~ |    expr_list_cont    '' 
-//~ | create_var_decl_node '' : a
-//~ |   chained_var_decl   '' 
-//~ |      terminator      '' 
-//~ |    more_top_decl     '' 
-//~ |         eof          '<EOF>' 
-//~====== end capacities ======
-//~> state_stack: 20
-//~> work_stack: 20
-//~> counts: 8
-//~> indent_stack: 8
-//~> nodes: 20
-//~> data: 20
-//~ = node count: 9
-//~ = lexeme count: 133
-//~ = source length: 1782
 //~
 //~--------------------------------------------------------
 //~  parse tree
 //~--------------------------------------------------------
 //~
 //~ module
-//~  |- var_decl: a
+//~  |- var_decl: a,b,c
 //~  |   |- typed_expr: i32
-//~  |   |   |- add
-//~  |   |   |   |- literal_int: 1
-//~  |   |   |   |- mul
-//~  |   |   |   |   |- literal_int: 1
-//~  |   |   |   |   |- literal_int: 2
+//~  |   |   |- literal_int: 1
+//~  |   |- typed_expr: i32
+//~  |   |   |- literal_int: 2
+//~  |   |- typed_expr: i32
+//~  |   |   |- literal_int: 3
+//~  |- var_decl: twelve
+//~  |   |- typed_expr: u8
+//~  |   |   |- literal_int: 12
+//~
+//~--------------------------------------------------------
+//~  semantic analysis debug trace
+//~--------------------------------------------------------
+//~
+//~ |      node       'var_decl'
+//~ |      node       'typed_expr'
+//~ |      node       'literal_int'
+//~ |    init_var     : a
+//~ |      node       'typed_expr'
+//~ |      node       'literal_int'
+//~ |    init_var     : b
+//~ |      node       'typed_expr'
+//~ |      node       'literal_int'
+//~ |    init_var     : c
+//~ |  next_top_decl
+//~ |      node       'var_decl'
+//~ |      node       'typed_expr'
+//~ |      node       'literal_int'
+//~ |    init_var     : twelve
+//~ |  next_top_decl
+//~
+//~--------------------------------------------------------
+//~  intermediate representation
+//~--------------------------------------------------------
+//~
+//~ %0 = global 'c'
+//~ %1 = global 'b'
+//~ %2 = global 'a'
+//~ %3 = i32 1
+//~ %4 = set %2 %3
+//~ %5 = i32 2
+//~ %6 = set %1 %5
+//~ %7 = i32 3
+//~ %8 = set %0 %7
+//~ %9 = global 'twelve'
+//~ %10 = u8 12
+//~ %11 = set %9 %10
