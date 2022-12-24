@@ -206,3 +206,11 @@ pub const BinaryOpNode = struct {
     lhs: NodeIndex,
     rhs: NodeIndex,
 };
+
+///-----------------------------------------------------
+///  layout for a typed expression node
+///
+pub const TypedExprNode = struct {
+    primitive: LexemeIndex,
+    expr: NodeIndex,
+};

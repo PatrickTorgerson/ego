@@ -71,9 +71,8 @@ pub const ParseTreeIterator = struct {
                     try self.push(nodi, top.depth + 1);
             },
             .typed_expr => {
-                // typed_expr offset field stores expr nodi
-                const data = self.tree.nodes.items(.offset)[top.nodi];
-                try self.push(data, top.depth + 1);
+                const data = self.tree.as_typed_expr(top.nodi);
+                try self.push(data.expr, top.depth + 1);
             },
             .add,
             .sub,

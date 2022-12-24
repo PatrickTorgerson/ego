@@ -466,7 +466,7 @@ pub const Lexer = struct {
                     },
                 },
                 .comment => switch (c) {
-                    '\r', '\n' => break,
+                    '\r', '\n', 0 => break,
                     else => {}
                 }
             }

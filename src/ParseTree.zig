@@ -81,7 +81,7 @@ pub fn as_module(tree: ParseTree, nodi: NodeIndex) grammar.ModuleNode {
     // data: decl_count, decl nodis...
     const decl_count = tree.data[offset];
     return .{
-        .top_decls = tree.data[offset + 1 .. offset + 1 + decl_count],
+        .top_decls = tree.data_slice(offset + 1, decl_count),
     };
 }
 
@@ -93,12 +93,12 @@ pub fn as_vardecl(tree: ParseTree, nodi: NodeIndex) grammar.VarDeclNode {
     const offset = tree.nodes.items(.offset)[nodi];
     // data: expr_count, expr nodis..., identifier_count, identifier lexis...
     const expr_start = offset + 1;
-    const expr_end = offset + 1 + tree.data[offset];
-    const identifier_start = expr_end + 1;
-    const identifier_end = expr_end + 1 + tree.data[expr_end];
+    const expr_count = tree.data[offset];
+    const identifier_offset = expr_start + expr_count;
+    const identifier_count = tree.data[identifier_offset];
     return .{
-        .identifiers = tree.data[identifier_start..identifier_end],
-        .initializers = tree.data[expr_start..expr_end],
+        .identifiers = tree.data_slice(identifier_offset + 1, identifier_count),
+        .initializers = tree.data_slice(offset + 1, expr_count),
     };
 }
 
@@ -118,8 +118,27 @@ pub fn as_binop(tree: ParseTree, nodi: NodeIndex) grammar.BinaryOpNode {
 }
 
 ///-----------------------------------------------------
+///  decodes a typed expr node
+///
+pub fn as_typed_expr(tree: ParseTree, nodi: NodeIndex) grammar.TypedExprNode {
+    assert(tree.nodes.items(.symbol)[nodi] == .typed_expr);
+    // offset is expr nodi
+    return .{
+        .primitive = tree.nodes.items(.lexi)[nodi],
+        .expr = tree.nodes.items(.offset)[nodi],
+    };
+}
+
+///-----------------------------------------------------
 ///  returns main lexeme for not at index `nodi`
 ///
 fn lexeme(tree: ParseTree, nodi: NodeIndex) *Lexeme {
     return &tree.lexemes[tree.nodes.items(.lexi)[nodi]];
+}
+
+///-----------------------------------------------------
+///  slice into data; tree.data[ offset .. offset + count ]
+///
+fn data_slice(tree: ParseTree, offset: usize, count: usize) []usize {
+    return tree.data[ offset .. offset + count ];
 }

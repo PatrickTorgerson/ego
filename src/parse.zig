@@ -508,16 +508,17 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
     try parser.data.append(allocator, parser.work_stack.items.len); // top decl count
     try parser.data.appendSlice(allocator, parser.work_stack.items[0..]); // top decl nodi's
 
-    debugtrace.print("\n//~====== end capacities ======\n", .{});
-    debugtrace.print("//~> state_stack: {}\n", .{parser.state_stack.capacity});
-    debugtrace.print("//~> work_stack: {}\n", .{parser.work_stack.capacity});
-    debugtrace.print("//~> counts: {}\n", .{parser.counts.capacity});
-    debugtrace.print("//~> indent_stack: {}\n", .{parser.indent_stack.capacity});
-    debugtrace.print("//~> nodes: {}\n", .{parser.nodes.capacity});
-    debugtrace.print("//~> data: {}\n", .{parser.data.capacity});
-    debugtrace.print("//~ = node count: {}\n", .{parser.nodes.len});
-    debugtrace.print("//~ = lexeme count: {}\n", .{lexemes.len});
-    debugtrace.print("//~ = source length: {}\n", .{source.len});
+    debugtrace.print("\n//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n", .{});
+    debugtrace.print("//~> state_stack cap: {}\n", .{parser.state_stack.capacity});
+    debugtrace.print("//~> work_stack cap: {}\n", .{parser.work_stack.capacity});
+    debugtrace.print("//~> counts cap: {}\n", .{parser.counts.capacity});
+    debugtrace.print("//~> indent_stack cap: {}\n", .{parser.indent_stack.capacity});
+    debugtrace.print("//~> nodes cap: {}\n", .{parser.nodes.capacity});
+    debugtrace.print("//~> data cap: {}\n", .{parser.data.capacity});
+    debugtrace.print("//~> node count: {}\n", .{parser.nodes.len});
+    debugtrace.print("//~> lexeme count: {}\n", .{lexemes.len});
+    debugtrace.print("//~> source length: {}\n", .{source.len});
+    debugtrace.print("//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n", .{});
 
     return ParseTree{
         .nodes = parser.nodes.slice(),
@@ -764,7 +765,7 @@ const Parser = struct {
     }
 
     ///----------------------------------------------------------------------
-    /// log unexpected symbol diagnostic
+    ///  log unexpected symbol diagnostic
     ///
     pub fn diag_unexpected(this: *Parser, unexpected: Terminal) error{OutOfMemory}!void {
         @setCold(true);
@@ -772,7 +773,7 @@ const Parser = struct {
     }
 
     ///----------------------------------------------------------------------
-    /// log diagnostic
+    ///  log diagnostic
     ///
     pub fn diag(this: *Parser, tag: ParseTree.Diagnostic.Tag) error{OutOfMemory}!void {
         @setCold(true);
@@ -780,7 +781,7 @@ const Parser = struct {
     }
 
     ///----------------------------------------------------------------------
-    /// log diagnostic
+    ///  log diagnostic
     ///
     pub fn diag_msg(this: *Parser, msg: ParseTree.Diagnostic) error{OutOfMemory}!void {
         @setCold(true);
@@ -792,7 +793,7 @@ const Parser = struct {
     }
 
     ///----------------------------------------------------------------------
-    /// enumeration of parsing states
+    ///  enumeration of parsing states
     ///
     pub const State = enum {
         top_decl,
