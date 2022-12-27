@@ -34,8 +34,9 @@ pub const Type = union(enum) {
 ///  de-duplicated cache of ego data types
 ///
 pub const TypeTable = struct {
-    pub const Index = usize;
     types: std.ArrayListUnmanaged(Type) = .{},
+
+    pub const Index = usize;
 
     ///----------------------------------------------------------------------
     ///  free allocated memory
@@ -60,7 +61,7 @@ pub const TypeTable = struct {
     ///----------------------------------------------------------------------
     ///  return Type from index
     ///
-    pub fn get(this: TypeTable, tid: usize) ?Type {
+    pub fn get(this: TypeTable, tid: Index) ?Type {
         if (tid >= this.types.items.len)
             return null;
         return this.types.items[tid];
@@ -69,7 +70,7 @@ pub const TypeTable = struct {
     ///----------------------------------------------------------------------
     ///  determine if tid refers to ty
     ///
-    pub fn eql(this: TypeTable, tid: usize, ty: Type) bool {
+    pub fn eql(this: TypeTable, tid: Index, ty: Type) bool {
         if (tid >= this.types.items.len)
             return false;
         return this.types.items[tid].eql(ty);
@@ -78,7 +79,7 @@ pub const TypeTable = struct {
     ///----------------------------------------------------------------------
     ///  size of type in bytes
     ///
-    pub fn sizeof(this: TypeTable, tid: usize) ?usize {
+    pub fn sizeof(this: TypeTable, tid: Index) ?usize {
         if (tid >= this.types.items.len)
             return null;
         switch (this.types.items[tid]) {
@@ -105,12 +106,80 @@ pub const TypeTable = struct {
     ///----------------------------------------------------------------------
     ///  determine if tid refers to a numeric type
     ///
-    pub fn is_numeric(this: TypeTable, tid: usize) !bool {
-        if (tid >= this.types.items.len)
-            return error.out_of_bounds;
-        return this.types.items[tid].active_tag() == .primitive and switch (this.types.items[tid].primitive) {
-            .@"u8", .@"u16", .@"u32", .@"u64", .@"u128", .@"i8", .@"i16", .@"i32", .@"i64", .@"i128", .@"f16", .@"f32", .@"f64", .@"f128" => true,
+    pub fn is_numeric(this: TypeTable, tid: Index) bool {
+        std.debug.assert(tid >= this.types.items.len);
+        return this.types.items[tid].active_tag() == .primitive and
+            switch (this.types.items[tid].primitive) {
+            .@"u8",
+            .@"u16",
+            .@"u32",
+            .@"u64",
+            .@"u128",
+            .@"i8",
+            .@"i16",
+            .@"i32",
+            .@"i64",
+            .@"i128",
+            .@"f16",
+            .@"f32",
+            .@"f64",
+            .@"f128",
+            => true,
             .@"bool" => false,
+        };
+    }
+
+    ///----------------------------------------------------------------------
+    ///  determine if tid refers to a numeric type
+    ///
+    pub fn is_integral(this: TypeTable, tid: Index) bool {
+        std.debug.assert(tid < this.types.items.len);
+        return this.types.items[tid].active_tag() == .primitive and
+            switch (this.types.items[tid].primitive) {
+            .@"u8",
+            .@"u16",
+            .@"u32",
+            .@"u64",
+            .@"u128",
+            .@"i8",
+            .@"i16",
+            .@"i32",
+            .@"i64",
+            .@"i128",
+            => true,
+            .@"f16",
+            .@"f32",
+            .@"f64",
+            .@"f128",
+            .@"bool",
+            => false,
+        };
+    }
+
+    ///----------------------------------------------------------------------
+    ///  determine if tid refers to a numeric type
+    ///
+    pub fn is_floating(this: TypeTable, tid: Index) bool {
+        std.debug.assert(tid < this.types.items.len);
+        return this.types.items[tid].active_tag() == .primitive and
+            switch (this.types.items[tid].primitive) {
+            .@"u8",
+            .@"u16",
+            .@"u32",
+            .@"u64",
+            .@"u128",
+            .@"i8",
+            .@"i16",
+            .@"i32",
+            .@"i64",
+            .@"i128",
+            .@"bool",
+            => false,
+            .@"f16",
+            .@"f32",
+            .@"f64",
+            .@"f128",
+            => true,
         };
     }
 };

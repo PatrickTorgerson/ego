@@ -211,12 +211,12 @@ const IrGen = struct {
 
             .literal_int => {
                 if (gen.type_context) |ty_ctx| {
-                    if (try gen.typetable.is_numeric(ty_ctx)) {
+                    if (gen.typetable.is_integral(ty_ctx)) {
                         const lexi = gen.tree.nodes.items(.lexi)[nodi];
                         const val = std.fmt.parseInt(i129, gen.lex_strs[lexi], 0) catch unreachable; // invalid int
                         switch (gen.typetable.get(ty_ctx).?) {
                             .primitive => |p| {
-                                if (val_fits_in_primitive(val, p)) switch (p) {
+                                if (int_fits_in_primitive(val, p)) switch (p) {
                                     .@"u8" => try gen.immediate_ins(.@"u8", @intCast(u8, val)),
                                     .@"u16" => try gen.immediate_ins(.@"u16", @intCast(u16, val)),
                                     .@"u32" => try gen.immediate_ins(.@"u32", @intCast(u32, val)),
@@ -234,6 +234,38 @@ const IrGen = struct {
                                     .@"bool",
                                     => unreachable, // ERR: type mismatch
                                 } else unreachable; // ERR: literal too large
+                            },
+                            //else => unreachable, // ERR: type mismatch
+                        }
+                    } else unreachable; // ERR: type mismatch
+                } else unreachable; // ERR: cannot infer type
+            },
+
+            .literal_float => {
+                if (gen.type_context) |ty_ctx| {
+                    if (gen.typetable.is_floating(ty_ctx)) {
+                        const lexi = gen.tree.nodes.items(.lexi)[nodi];
+                        const val = std.fmt.parseFloat(f128, gen.lex_strs[lexi]) catch unreachable; // invalid float
+                        switch (gen.typetable.get(ty_ctx).?) {
+                            .primitive => |p| {
+                                switch (p) {
+                                    .@"u8",
+                                    .@"u16",
+                                    .@"u32",
+                                    .@"u64",
+                                    .@"u128",
+                                    .@"i8",
+                                    .@"i16",
+                                    .@"i32",
+                                    .@"i64",
+                                    .@"i128",
+                                    .@"bool",
+                                    => unreachable, // ERR: type mismatch
+                                    .@"f16" => try gen.immediate_ins(.@"f16", @floatCast(f16, val)),
+                                    .@"f32" => try gen.immediate_ins(.@"f32", @floatCast(f32, val)),
+                                    .@"f64" => try gen.immediate_ins(.@"f64", @floatCast(f64, val)),
+                                    .@"f128" => try gen.immediate_ins(.@"f128", @floatCast(f128, val)),
+                                }
                             },
                             //else => unreachable, // ERR: type mismatch
                         }
@@ -266,7 +298,6 @@ const IrGen = struct {
             .type_or,
             .bool_and,
             .bool_or,
-            .literal_float,
             .literal_hex,
             .literal_octal,
             .literal_binary,
@@ -301,7 +332,7 @@ const IrGen = struct {
     ///  appends an ir instruction to the ins buffer
     ///
     fn write_ins(gen: *IrGen, comptime op: Ir.Op, data: Ir.OpData(op)) !void {
-        const payload = switch (op) {
+        const payload: Ir.Data = switch (op) {
             .@"u8" => .{ .@"u8" = data },
             .@"u16" => .{ .@"u16" = data },
             .@"u32" => .{ .@"u32" = data },
@@ -420,9 +451,13 @@ const IrGen = struct {
     }
 
     ///----------------------------------------------------------------------
-    ///  determines if a value is within the range of primitive
+    ///  determines if a integer is within the range of primitive
     ///
-    fn val_fits_in_primitive(val: i129, primitive: Type.Primitive) bool {
+    fn int_fits_in_primitive(val: i129, primitive: Type.Primitive) bool {
+        std.debug.assert(switch (primitive) {
+            .@"u8", .@"u16", .@"u32", .@"u64", .@"u128", .@"i8", .@"i16", .@"i32", .@"i64", .@"i128" => true,
+            .@"f16", .@"f32", .@"f64", .@"f128", .@"bool" => false,
+        });
         return switch (primitive) {
             .@"u8" => val >= std.math.minInt(u8) and val <= std.math.maxInt(u8),
             .@"u16" => val >= std.math.minInt(u16) and val <= std.math.maxInt(u16),
@@ -434,11 +469,7 @@ const IrGen = struct {
             .@"i32" => val >= std.math.minInt(i32) and val <= std.math.maxInt(i32),
             .@"i64" => val >= std.math.minInt(i64) and val <= std.math.maxInt(i64),
             .@"i128" => val >= std.math.minInt(i128) and val <= std.math.maxInt(i128),
-            .@"f16" => true,
-            .@"f32" => true,
-            .@"f64" => true,
-            .@"f128" => true,
-            .@"bool" => true,
+            .@"f16", .@"f32", .@"f64", .@"f128", .@"bool" => unreachable,
         };
     }
 };
