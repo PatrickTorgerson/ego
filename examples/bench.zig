@@ -8,31 +8,30 @@ const std = @import("std");
 const ego = @import("ego");
 
 const default_src: []const u8 =
-\\  const a = 1 ; const b,c,d,e = 9,8,7,6
-\\
+    \\  const a = 1 ; const b,c,d,e = 9,8,7,6
+    \\
 ;
 
 // TODO: use arg 0 to get exe name
 const usage_line = "  bench [-i FILE] [-o FILE] [-io FILE | -oi FILE] [-P][-p][-S][-s]\n";
 const help_msg =
-\\Options
-\\  -i   file used for source input
-\\  -o   file used for output
-\\  -p   output AST
-\\  -P   output parse trace
-\\  -s   output ir
-\\  -S   output semantic analysis trace
-\\Notes
-\\  * if no input is specified uses a default source
-\\  * if no output is specified uses stdout
-\\  * if multiple inputs or outputs are specified, uses last occurrence
-\\  * a file can be used as both input and output with '-io'
-\\  * options can be combined, '-ap'
-\\
+    \\Options
+    \\  -i   file used for source input
+    \\  -o   file used for output
+    \\  -p   output AST
+    \\  -P   output parse trace
+    \\  -s   output ir
+    \\  -S   output semantic analysis trace
+    \\Notes
+    \\  * if no input is specified uses a default source
+    \\  * if no output is specified uses stdout
+    \\  * if multiple inputs or outputs are specified, uses last occurrence
+    \\  * a file can be used as both input and output with '-io'
+    \\  * options can be combined, '-ap'
+    \\
 ;
 
-pub fn main() !void
-{
+pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     var allocator = gpa.allocator();
@@ -63,33 +62,35 @@ pub fn main() !void
             if (args.next()) |out_path| {
                 out_file = try set_output(allocator, out_path);
                 out = out_file.?.writer();
+            } else {
+                std.debug.print("expected output file", .{});
+                return;
             }
-            else { std.debug.print("expected output file", .{}); return; }
-        }
-        else if (std.mem.eql(u8, arg, "-i")) {
+        } else if (std.mem.eql(u8, arg, "-i")) {
             if (args.next()) |src_path| {
                 src = try set_input(allocator, src_path);
                 deinit_src = true;
+            } else {
+                std.debug.print("expected input file", .{});
+                return;
             }
-            else { std.debug.print("expected input file", .{}); return; }
-        }
-        else if (std.mem.eql(u8, arg, "-io") or std.mem.eql(u8, arg, "-oi")) {
+        } else if (std.mem.eql(u8, arg, "-io") or std.mem.eql(u8, arg, "-oi")) {
             if (args.next()) |io_path| {
                 src = try set_input(allocator, io_path);
                 deinit_src = true;
                 out_file = try set_output(allocator, io_path);
                 out = out_file.?.writer();
+            } else {
+                std.debug.print("expected input file", .{});
+                return;
             }
-            else { std.debug.print("expected input file", .{}); return; }
-        }
-        else if (std.mem.eql(u8, arg, "--help")) {
+        } else if (std.mem.eql(u8, arg, "--help")) {
             const cout = std.io.getStdOut().writer();
             try cout.writeAll("Usage\n");
             try cout.writeAll(usage_line);
             try cout.writeAll(help_msg);
             return;
-        }
-        else if (arg.len >= 2 and arg[0] == '-' and arg[1] != '-') {
+        } else if (arg.len >= 2 and arg[0] == '-' and arg[1] != '-') {
             for (arg[1..]) |c| {
                 switch (c) {
                     'P' => trace_parse = true,
@@ -106,8 +107,7 @@ pub fn main() !void
                     },
                 }
             }
-        }
-        else {
+        } else {
             const cout = std.io.getStdOut().writer();
             try cout.print(" unrecognized option '{s}'\n", .{arg});
             try cout.writeAll("Usage\n");
@@ -125,6 +125,11 @@ pub fn main() !void
 
     try header(out, "source");
     try dump_source(out, src);
+
+    if (!trace_parse and
+        !trace_sema and
+        !dump_ast and
+        !dump_ir) return;
 
     if (trace_parse) {
         try header(out, "parser debug trace");
@@ -155,6 +160,8 @@ pub fn main() !void
         return;
     }
 
+    if (!trace_sema and !dump_ir) return;
+
     if (trace_sema) {
         try header(out, "semantic analysis debug trace");
         ego.debugtrace.set_out_writer(ego.util.GenericWriter.init(&out));
@@ -168,8 +175,8 @@ pub fn main() !void
     if (dump_ir) {
         // TODO: actual ir dissasembly
         try header(out, "intermediate representation");
-        for (ir.instructions) |ins,i| {
-            try out.print("//~ %{} = {s} ", .{i, @tagName(ins.op)});
+        for (ir.instructions) |ins, i| {
+            try out.print("//~ %{} = {s} ", .{ i, @tagName(ins.op) });
             switch (ins.op) {
                 .@"u8" => try out.print("{}", .{ins.data.@"u8"}),
                 .@"u16" => try out.print("{}", .{ins.data.@"u16"}),
@@ -187,8 +194,7 @@ pub fn main() !void
                 .@"f128" => try out.print("{}", .{ins.data.@"f128"}),
                 .@"bool" => try out.print("{}", .{ins.data.@"bool"}),
                 .global => try out.print("'{s}'", .{ir.stringcache.get(ir.decls[ins.data.decl].name)}),
-                .add, .sub, .mul, .div,
-                .get, .set => try out.print("%{} %{}", .{ins.data.bin.l, ins.data.bin.r}),
+                .add, .sub, .mul, .div, .get, .set => try out.print("%{} %{}", .{ ins.data.bin.l, ins.data.bin.r }),
             }
             try out.print("\n", .{});
         }
@@ -215,17 +221,16 @@ fn set_output(allocator: std.mem.Allocator, path: []const u8) !std.fs.File {
 /// dumps source to out ommiting prev dumps
 fn dump_source(out: anytype, src: []const u8) !void {
     var comment = false;
-    for (src) |c,i| {
+    for (src) |c, i| {
         if (comment) {
-            if(c == '\n')
+            if (c == '\n')
                 comment = false;
-        }
-        else if (c == '/') {
-            if (i+2 < src.len and src[i+1] == '/' and src[i+2] == '~')
+        } else if (c == '/') {
+            if (i + 2 < src.len and src[i + 1] == '/' and src[i + 2] == '~')
                 comment = true
-            else try out.writeByte(c);
-        }
-        else {
+            else
+                try out.writeByte(c);
+        } else {
             try out.writeByte(c);
         }
     }

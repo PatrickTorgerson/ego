@@ -97,7 +97,10 @@ pub fn gen_ir(allocator: std.mem.Allocator, tree: ParseTree) !Ir {
                 const deci = gen.uninitialized.pop();
                 debugtrace.print(": {s}", .{gen.stringcache.get(gen.decls.items[deci].name)});
                 gen.decls.items[deci].data = .{ .variable = .{ .ty = gen.type_context.? } };
-                try gen.write_ins(.set, .{ .l = gen.decls.items[deci].ins, .r = init });
+                try gen.write_ins(.set, .{
+                    .l = gen.decls.items[deci].ins,
+                    .r = init,
+                });
                 gen.type_context = null;
             },
 
@@ -175,13 +178,12 @@ const IrGen = struct {
         switch (gen.node_syms[nodi]) {
             .var_decl => {
                 const data = gen.tree.as_vardecl(nodi);
-
                 // allocate declarations
                 var lexi_iter = ReverseIter(LexemeIndex).init(data.identifiers);
                 while (lexi_iter.next()) |lexi| {
                     const deci = gen.decls.items.len;
                     try gen.decls.append(gen.allocator, .{
-                        .name = try gen.chache_lexi(lexi),
+                        .name = try gen.cache_lexi(lexi),
                         .ins = gen.instructions.items.len,
                         .data = .undef,
                     });
@@ -192,7 +194,6 @@ const IrGen = struct {
                     });
                     try gen.uninitialized.append(gen.allocator, deci);
                 }
-
                 // queue initializers
                 var nodi_iter = ReverseIter(NodeIndex).init(data.initializers);
                 while (nodi_iter.next()) |init_nodi| {
@@ -226,7 +227,12 @@ const IrGen = struct {
                                     .@"i32" => try gen.immediate_ins(.@"i32", @intCast(i32, val)),
                                     .@"i64" => try gen.immediate_ins(.@"i64", @intCast(i64, val)),
                                     .@"i128" => try gen.immediate_ins(.@"i128", @intCast(i128, val)),
-                                    .@"f16", .@"f32", .@"f64", .@"f128", .@"bool" => unreachable, // ERR: type mismatch
+                                    .@"f16",
+                                    .@"f32",
+                                    .@"f64",
+                                    .@"f128",
+                                    .@"bool",
+                                    => unreachable, // ERR: type mismatch
                                 } else unreachable; // ERR: literal too large
                             },
                             //else => unreachable, // ERR: type mismatch
@@ -235,7 +241,11 @@ const IrGen = struct {
                 } else unreachable; // ERR: cannot infer type
             },
 
-            .add, .sub, .mul, .div => {
+            .add,
+            .sub,
+            .mul,
+            .div,
+            => {
                 const data = gen.tree.as_binop(nodi);
                 try gen.node_stack.append(gen.allocator, data.rhs);
                 try gen.node_stack.append(gen.allocator, data.lhs);
@@ -243,7 +253,30 @@ const IrGen = struct {
                 try gen.append_states(.{ .node, .node });
             },
 
-            .mod, .concat, .arrmul, .equals, .not_equals, .less_than, .lesser_or_equal, .greater_than, .greater_or_equal, .type_and, .type_or, .bool_and, .bool_or, .literal_float, .literal_hex, .literal_octal, .literal_binary, .literal_true, .literal_false, .literal_nil, .literal_string, .module, .@"<ERR>" => unreachable, // TODO: Not implemented
+            .mod,
+            .concat,
+            .arrmul,
+            .equals,
+            .not_equals,
+            .less_than,
+            .lesser_or_equal,
+            .greater_than,
+            .greater_or_equal,
+            .type_and,
+            .type_or,
+            .bool_and,
+            .bool_or,
+            .literal_float,
+            .literal_hex,
+            .literal_octal,
+            .literal_binary,
+            .literal_true,
+            .literal_false,
+            .literal_nil,
+            .literal_string,
+            .module,
+            .@"<ERR>",
+            => unreachable, // TODO: Not implemented
         }
     }
 
@@ -267,72 +300,55 @@ const IrGen = struct {
     ///----------------------------------------------------------------------
     ///  appends an ir instruction to the ins buffer
     ///
-    fn write_ins(gen: *IrGen, comptime op: Ir.Op, data: switch (op) {
-        .@"u8" => u8,
-        .@"u16" => u16,
-        .@"u32" => u32,
-        .@"u64" => u64,
-        .@"u128" => u128,
-        .@"i8" => i8,
-        .@"i16" => i16,
-        .@"i32" => i32,
-        .@"i64" => i64,
-        .@"i128" => i128,
-        .@"f16" => f16,
-        .@"f32" => f32,
-        .@"f64" => f64,
-        .@"f128" => f128,
-        .@"bool" => bool,
-        .global => Ir.DeclIndex,
-        .set, .get, .add, .sub, .mul, .div => Ir.Data.Bin,
-    }) !void {
-        try switch (op) {
-            .@"u8" => gen.instructions.append(gen.allocator, .{ .op = op, .data = .{ .@"u8" = data } }),
-            .@"u16" => gen.instructions.append(gen.allocator, .{ .op = op, .data = .{ .@"u16" = data } }),
-            .@"u32" => gen.instructions.append(gen.allocator, .{ .op = op, .data = .{ .@"u32" = data } }),
-            .@"u64" => gen.instructions.append(gen.allocator, .{ .op = op, .data = .{ .@"u64" = data } }),
-            .@"u128" => gen.instructions.append(gen.allocator, .{ .op = op, .data = .{ .@"u128" = data } }),
-            .@"i8" => gen.instructions.append(gen.allocator, .{ .op = op, .data = .{ .@"i8" = data } }),
-            .@"i16" => gen.instructions.append(gen.allocator, .{ .op = op, .data = .{ .@"i16" = data } }),
-            .@"i32" => gen.instructions.append(gen.allocator, .{ .op = op, .data = .{ .@"i32" = data } }),
-            .@"i64" => gen.instructions.append(gen.allocator, .{ .op = op, .data = .{ .@"i64" = data } }),
-            .@"i128" => gen.instructions.append(gen.allocator, .{ .op = op, .data = .{ .@"i128" = data } }),
-            .@"f16" => gen.instructions.append(gen.allocator, .{ .op = op, .data = .{ .@"f16" = data } }),
-            .@"f32" => gen.instructions.append(gen.allocator, .{ .op = op, .data = .{ .@"f32" = data } }),
-            .@"f64" => gen.instructions.append(gen.allocator, .{ .op = op, .data = .{ .@"f64" = data } }),
-            .@"f128" => gen.instructions.append(gen.allocator, .{ .op = op, .data = .{ .@"f128" = data } }),
-            .@"bool" => gen.instructions.append(gen.allocator, .{ .op = op, .data = .{ .@"bool" = data } }),
-            .global => gen.instructions.append(gen.allocator, .{ .op = op, .data = .{ .decl = data } }),
-            .set, .get, .add, .sub, .mul, .div => gen.instructions.append(gen.allocator, .{ .op = op, .data = .{ .bin = data } }),
+    fn write_ins(gen: *IrGen, comptime op: Ir.Op, data: Ir.OpData(op)) !void {
+        const payload = switch (op) {
+            .@"u8" => .{ .@"u8" = data },
+            .@"u16" => .{ .@"u16" = data },
+            .@"u32" => .{ .@"u32" = data },
+            .@"u64" => .{ .@"u64" = data },
+            .@"u128" => .{ .@"u128" = data },
+            .@"i8" => .{ .@"i8" = data },
+            .@"i16" => .{ .@"i16" = data },
+            .@"i32" => .{ .@"i32" = data },
+            .@"i64" => .{ .@"i64" = data },
+            .@"i128" => .{ .@"i128" = data },
+            .@"f16" => .{ .@"f16" = data },
+            .@"f32" => .{ .@"f32" = data },
+            .@"f64" => .{ .@"f64" = data },
+            .@"f128" => .{ .@"f128" = data },
+            .@"bool" => .{ .@"bool" = data },
+            .global => .{ .decl = data },
+
+            .set, .get, .add, .sub, .mul, .div => .{ .bin = data },
         };
+
+        try gen.instructions.append(gen.allocator, .{ .op = op, .data = payload });
     }
 
     ///----------------------------------------------------------------------
     ///  appends an immediate instruction to the ins buffer, and
     ///  operand stack
     ///
-    fn immediate_ins(
-        gen: *IrGen,
-        comptime op: Ir.Op,
-        value: switch (op) {
-            .@"u8" => u8,
-            .@"u16" => u16,
-            .@"u32" => u32,
-            .@"u64" => u64,
-            .@"u128" => u128,
-            .@"i8" => i8,
-            .@"i16" => i16,
-            .@"i32" => i32,
-            .@"i64" => i64,
-            .@"i128" => i128,
-            .@"f16" => f16,
-            .@"f32" => f32,
-            .@"f64" => f64,
-            .@"f128" => f128,
-            .@"bool" => bool,
-            .global, .set, .get, .add, .sub, .mul, .div => unreachable, // expected immediate op
-        },
-    ) !void {
+    fn immediate_ins(gen: *IrGen, comptime op: Ir.Op, value: Ir.OpData(op)) !void {
+        std.debug.assert(switch (op) {
+            .@"u8",
+            .@"u16",
+            .@"u32",
+            .@"u64",
+            .@"u128",
+            .@"i8",
+            .@"i16",
+            .@"i32",
+            .@"i64",
+            .@"i128",
+            .@"f16",
+            .@"f32",
+            .@"f64",
+            .@"f128",
+            .@"bool",
+            => true,
+            else => false,
+        });
         try gen.write_ins(op, value);
         try gen.operand_stack.append(gen.allocator, gen.instructions.items.len - 1);
     }
@@ -360,7 +376,7 @@ const IrGen = struct {
     ///----------------------------------------------------------------------
     ///  caches lexi's string, returns index
     ///
-    fn chache_lexi(gen: *IrGen, lexi: LexemeIndex) !StringCache.Index {
+    fn cache_lexi(gen: *IrGen, lexi: LexemeIndex) !StringCache.Index {
         return try gen.stringcache.add(gen.allocator, gen.lex_strs[lexi]);
     }
 

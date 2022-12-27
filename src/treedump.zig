@@ -74,12 +74,39 @@ pub const ParseTreeIterator = struct {
                 const data = self.tree.as_typed_expr(top.nodi);
                 try self.push(data.expr, top.depth + 1);
             },
-            .add, .sub, .mul, .div, .mod, .concat, .arrmul, .equals, .not_equals, .less_than, .lesser_or_equal, .greater_than, .greater_or_equal, .type_and, .type_or, .bool_and, .bool_or => {
+            .add,
+            .sub,
+            .mul,
+            .div,
+            .mod,
+            .concat,
+            .arrmul,
+            .equals,
+            .not_equals,
+            .less_than,
+            .lesser_or_equal,
+            .greater_than,
+            .greater_or_equal,
+            .type_and,
+            .type_or,
+            .bool_and,
+            .bool_or,
+            => {
                 const data = self.tree.as_binop(top.nodi);
                 try self.push(data.rhs, top.depth + 1);
                 try self.push(data.lhs, top.depth + 1);
             },
-            .literal_int, .literal_float, .literal_hex, .literal_octal, .literal_binary, .literal_true, .literal_false, .literal_nil, .literal_string, .@"<ERR>" => {
+            .literal_int,
+            .literal_float,
+            .literal_hex,
+            .literal_octal,
+            .literal_binary,
+            .literal_true,
+            .literal_false,
+            .literal_nil,
+            .literal_string,
+            .@"<ERR>",
+            => {
                 // leaf
             },
         }
@@ -140,10 +167,37 @@ pub fn dump(allocator: std.mem.Allocator, out_writer: anytype, tree: ParseTree, 
                         try out_writer.writeByte(',');
                 }
             },
-            .add, .sub, .mul, .div, .mod, .concat, .arrmul, .equals, .not_equals, .less_than, .lesser_or_equal, .greater_than, .greater_or_equal, .type_and, .type_or, .bool_and, .bool_or => {
+            .add,
+            .sub,
+            .mul,
+            .div,
+            .mod,
+            .concat,
+            .arrmul,
+            .equals,
+            .not_equals,
+            .less_than,
+            .lesser_or_equal,
+            .greater_than,
+            .greater_or_equal,
+            .type_and,
+            .type_or,
+            .bool_and,
+            .bool_or,
+            => {
                 // no op
             },
-            .typed_expr, .literal_int, .literal_float, .literal_hex, .literal_octal, .literal_binary, .literal_true, .literal_false, .literal_nil, .literal_string => {
+            .typed_expr,
+            .literal_int,
+            .literal_float,
+            .literal_hex,
+            .literal_octal,
+            .literal_binary,
+            .literal_true,
+            .literal_false,
+            .literal_nil,
+            .literal_string,
+            => {
                 try out_writer.writeAll(": ");
                 try out_writer.writeAll(strs[lexis[node.nodi]]);
             },

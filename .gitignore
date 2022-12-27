@@ -4,3 +4,4 @@ zig-out
 ego-tests/
 grammar.ebnf
 run-tokei.bat
+playground.ego

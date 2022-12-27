@@ -269,7 +269,16 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
                     // .bang =>
                     //     try parser.state_stack.append(allocator, .unary_expr),
 
-                    .literal_int, .literal_float, .literal_hex, .literal_octal, .literal_binary, .literal_false, .literal_true, .literal_nil, .literal_string => {
+                    .literal_int,
+                    .literal_float,
+                    .literal_hex,
+                    .literal_octal,
+                    .literal_binary,
+                    .literal_false,
+                    .literal_true,
+                    .literal_nil,
+                    .literal_string,
+                    => {
                         // TODO: typed literals
                         try parser.push_node(.{
                             .symbol = Symbol.init_literal(parser.lexeme()).?,
@@ -326,7 +335,24 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
 
             // => [BINOP, .expression]
             .expr_cont => switch (parser.lexeme()) {
-                .plus, .minus, .star, .slash, .percent, .plus_plus, .star_star, .equal_equal, .bang_equal, .lesser, .lesser_equal, .greater, .greater_equal, .ampersand_ampersand, .pipe_pipe, .ky_and, .ky_or => {
+                .plus,
+                .minus,
+                .star,
+                .slash,
+                .percent,
+                .plus_plus,
+                .star_star,
+                .equal_equal,
+                .bang_equal,
+                .lesser,
+                .lesser_equal,
+                .greater,
+                .greater_equal,
+                .ampersand_ampersand,
+                .pipe_pipe,
+                .ky_and,
+                .ky_or,
+                => {
                     if (prec < precedence(parser.lexeme())) {
                         try parser.push(parser.lexi); // operator
                         try parser.push(prec); // prev prec
@@ -348,7 +374,22 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
                     // TODO: var decl missing initializer
                     try parser.diag_expected(.equal);
                     switch (parser.lexeme()) {
-                        .minus, .bang, .literal_int, .literal_float, .literal_hex, .literal_octal, .literal_binary, .literal_false, .literal_true, .literal_nil, .literal_string, .lparen, .identifier, .period, .colon_colon => {
+                        .minus,
+                        .bang,
+                        .literal_int,
+                        .literal_float,
+                        .literal_hex,
+                        .literal_octal,
+                        .literal_binary,
+                        .literal_false,
+                        .literal_true,
+                        .literal_nil,
+                        .literal_string,
+                        .lparen,
+                        .identifier,
+                        .period,
+                        .colon_colon,
+                        => {
                             //
                         },
                         else => parser.next_top_decl(),
