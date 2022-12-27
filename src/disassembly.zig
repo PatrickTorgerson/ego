@@ -13,7 +13,7 @@ const TypeTable = @import("type.zig").TypeTable;
 ///
 pub fn disassemble(writer: anytype, code: CodePage, tytable: TypeTable) !void {
     var offset: usize = 0;
-    while(offset < code.buffer.len) {
+    while (offset < code.buffer.len) {
         offset += try disassemble_ins(writer, code, offset, tytable);
         try writer.writeByte('\n');
     }
@@ -23,7 +23,7 @@ pub fn disassemble(writer: anytype, code: CodePage, tytable: TypeTable) !void {
 pub fn disassemble_ins(writer: anytype, code: CodePage, offset: usize, tytable: TypeTable) !usize {
     var size: usize = 0;
     var ins = code.buffer[offset..];
-    while(ins[0] == 0) {
+    while (ins[0] == 0) {
         ins.ptr += 1;
         size += 1;
     }
@@ -33,15 +33,8 @@ pub fn disassemble_ins(writer: anytype, code: CodePage, offset: usize, tytable: 
     size += 1;
 
     try writer.print("{s: <15}", .{@tagName(op)});
-    switch(op) {
-        .addi,
-        .subi,
-        .muli,
-        .divi,
-        .addf,
-        .subf,
-        .mulf,
-        .divf => {
+    switch (op) {
+        .addi, .subi, .muli, .divi, .addf, .subf, .mulf, .divf => {
             try std.fmt.format(writer, " {d: <4} {d: <4} {d: <4}", .{
                 std.mem.bytesAsValue(u16, ins[0..2]).*,
                 std.mem.bytesAsValue(u16, ins[2..4]).*,
@@ -66,12 +59,12 @@ pub fn disassemble_ins(writer: anytype, code: CodePage, offset: usize, tytable: 
                 k,
             });
 
-            const kst = code.kst[k*8..];
-            for(code.kst_map) |entry| {
-                if(entry.index == k) {
-                    if(tytable.eql(entry.tid, .{.int={}}))
+            const kst = code.kst[k * 8 ..];
+            for (code.kst_map) |entry| {
+                if (entry.index == k) {
+                    if (tytable.eql(entry.tid, .{ .int = {} }))
                         try writer.print("     // {d}", .{std.mem.bytesAsValue(i64, kst[0..8]).*});
-                    if(tytable.eql(entry.tid, .{.float={}}))
+                    if (tytable.eql(entry.tid, .{ .float = {} }))
                         try writer.print("     // {d:.4}", .{std.mem.bytesAsValue(f64, kst[0..8]).*});
                 }
             }

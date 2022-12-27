@@ -14,7 +14,7 @@ const Value = @import("value.zig").Value;
 pub const Vm = struct {
     pub const Error = error{stack_overflow} || Value.Error;
 
-    pub const Callframe = struct{
+    pub const Callframe = struct {
         base: []u8,
         ret_addr: [*]u8,
     };
@@ -24,7 +24,6 @@ pub const Vm = struct {
 
     /// execute ego bytecode
     pub fn execute(vm: *Vm, allocator: std.mem.Allocator, instructions: *InstructionBuffer) Error!void {
-
         var frames = std.ArrayList(Callframe).init(allocator);
         defer frames.deinit();
 
@@ -35,7 +34,6 @@ pub const Vm = struct {
 
         while (instructions.buffer.len > 0) {
             switch (instructions.read_op()) {
-
                 .const64 => {
                     const d = instructions.read(u16);
                     const k = instructions.read(u16);
@@ -84,13 +82,13 @@ pub const Vm = struct {
     // TODO: index into current stack frame
     fn stack_at(vm: *Vm, comptime T: type, index: u16) *T {
         const s = @sizeOf(T);
-        var at = vm.stack[index * s..];
+        var at = vm.stack[index * s ..];
         return std.mem.bytesAsValue(T, @alignCast(s, at[0..s]));
     }
 
     fn kst_at(vm: *Vm, comptime T: type, index: u16) *const T {
         const s = @sizeOf(T);
-        var at = vm.kst[index * s..];
+        var at = vm.kst[index * s ..];
         return std.mem.bytesAsValue(T, @alignCast(s, at[0..s]));
     }
 
@@ -130,12 +128,11 @@ pub const Vm = struct {
     ///
     fn divf(vm: *Vm, comptime op: Opcode, instructions: *InstructionBuffer) void {
         const T = ArithTy(op);
-        if(comptime is_floating(T)) {
+        if (comptime is_floating(T)) {
             vm.stack_at(T, instructions.read(u16)).* =
                 vm.stack_at(T, instructions.read(u16)).* /
                 vm.stack_at(T, instructions.read(u16)).*;
-        }
-        else unreachable;
+        } else unreachable;
     }
 
     // ********************************************************************************

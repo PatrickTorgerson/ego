@@ -467,8 +467,8 @@ pub const Lexer = struct {
                 },
                 .comment => switch (c) {
                     '\r', '\n', 0 => break,
-                    else => {}
-                }
+                    else => {},
+                },
             }
         }
 
@@ -606,7 +606,6 @@ const keywords = std.ComptimeStringMap(Terminal, .{
     .{ "f128", .primitive },
     .{ "bool", .primitive },
 });
-
 
 ///----------------------------------------------------------------------
 ///  returns keyword terminal is string is a keyword, null otherwise

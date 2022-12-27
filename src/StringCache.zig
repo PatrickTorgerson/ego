@@ -47,7 +47,7 @@ pub fn to_owned_cahce(this: *StringCache, allocator: std.mem.Allocator) StringCa
 pub fn get(this: StringCache, index: Index) []const u8 {
     std.debug.assert(index < this.slices.items.len);
     const slice = this.slices.items[index];
-    return this.buffer.items[ slice.start .. slice.end ];
+    return this.buffer.items[slice.start..slice.end];
 }
 
 ///----------------------------------------------------------------------
@@ -56,13 +56,13 @@ pub fn get(this: StringCache, index: Index) []const u8 {
 pub fn add(this: *StringCache, allocator: std.mem.Allocator, str: []const u8) !Index {
     // search
     // TODO: hash map lookup
-    for (this.slices.items) |slice,i| {
-        if (std.mem.eql(u8, str, this.buffer.items[ slice.start .. slice.end ]))
+    for (this.slices.items) |slice, i| {
+        if (std.mem.eql(u8, str, this.buffer.items[slice.start..slice.end]))
             return i;
     }
     // append
     const pos = this.buffer.items.len;
     try this.buffer.appendSlice(allocator, str);
-    try this.slices.append(allocator, .{ .start = pos, .end = pos + str.len});
+    try this.slices.append(allocator, .{ .start = pos, .end = pos + str.len });
     return this.slices.items.len - 1;
 }

@@ -14,14 +14,14 @@ pub const BufferStack = struct {
 
     /// must deinit with BufferStack.deinit()
     pub fn init(allocator: std.mem.Allocator) This {
-        return This {
+        return This{
             .buff = std.ArrayList(u8).init(allocator),
         };
     }
 
     /// capacity in bytes, must deinit with BufferStack.deinit()
     pub fn init_capacity(allocator: std.mem.Allocator, capacity: usize) !This {
-        return This {
+        return This{
             .buff = std.ArrayList(u8).initCapacity(allocator, capacity),
         };
     }
@@ -46,8 +46,7 @@ pub const BufferStack = struct {
     }
 
     ///
-    pub fn write(this: *This, comptime T: type, index: u16, value: T) void
-    {
+    pub fn write(this: *This, comptime T: type, index: u16, value: T) void {
         this.read(T, index).* = value;
     }
 
@@ -59,7 +58,7 @@ pub const BufferStack = struct {
     ///
     fn pad(this: *This, alignment: usize) !void {
         const mod = this.buff.items.len % alignment;
-        if(mod == 0) return;
+        if (mod == 0) return;
         try this.buff.appendNTimes(0, alignment - mod);
     }
 };
@@ -68,14 +67,14 @@ pub const BufferStack = struct {
 ///       being mapped and should be avoided, prefer MappedBufferStack.push()
 pub const MappedBufferStack = struct {
     const This = @This();
-    pub const Entry = struct {tid:usize,index:u16};
+    pub const Entry = struct { tid: usize, index: u16 };
 
     buff: BufferStack,
     map: std.ArrayList(Entry),
 
     /// must deinit with MappedBufferStack.deinit()
     pub fn init(allocator: std.mem.Allocator) This {
-        return This {
+        return This{
             .buff = BufferStack.init(allocator),
             .map = std.ArrayList(Entry).init(allocator),
         };
@@ -83,7 +82,7 @@ pub const MappedBufferStack = struct {
 
     /// capacity in bytes, must deinit with MappedBufferStack.deinit()
     pub fn init_capacity(allocator: std.mem.Allocator, capacity: usize) !This {
-        return This {
+        return This{
             .buff = BufferStack.init_capacity(allocator, capacity),
             .map = std.ArrayList(Entry).initCapacity(allocator, capacity),
         };
@@ -98,17 +97,17 @@ pub const MappedBufferStack = struct {
     /// use this instead of pushing directly to MappedBufferStack.buff
     pub fn push(this: *This, comptime T: type, val: T, tid: usize) !u16 {
         const index = try this.buff.push(T, val);
-        try this.map.append(.{.tid = tid, .index = index});
+        try this.map.append(.{ .tid = tid, .index = index });
         return index;
     }
 
     /// O(n)
     pub fn search(this: This, comptime T: type, val: T, tid: usize) ?u16 {
-        for(this.map.items) |entry| {
-            if(entry.tid == tid) {
-                const slice = this.buff.buff.items[entry.index*@sizeOf(T)..];
+        for (this.map.items) |entry| {
+            if (entry.tid == tid) {
+                const slice = this.buff.buff.items[entry.index * @sizeOf(T) ..];
                 const bufval = std.mem.bytesAsValue(T, slice[0..@sizeOf(T)]).*;
-                if(val == bufval)
+                if (val == bufval)
                     return entry.index;
             }
         }

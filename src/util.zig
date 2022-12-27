@@ -20,13 +20,13 @@ pub fn ReverseIter(comptime T: type) type {
         pub fn init(slice: []T) This {
             return .{
                 .slice = slice,
-                .i = slice.len - if(slice.len == 0) @as(usize, 0) else @as(usize, 1),
+                .i = slice.len - if (slice.len == 0) @as(usize, 0) else @as(usize, 1),
             };
         }
 
         pub fn next(this: *This) ?T {
             // 0 -% 1 == ~@as(usize,0) > slice.len
-            if(this.i >= this.slice.len)
+            if (this.i >= this.slice.len)
                 return null;
             // wrapping to prevent under-flow
             defer this.i -%= 1;

@@ -61,8 +61,7 @@ pub fn deinit_buffer() void {
 pub fn trace_enabled() bool {
     if (builtin.mode == std.builtin.Mode.Debug) {
         return writer != null;
-    }
-    else return false;
+    } else return false;
 }
 
 ///----------------------------------------------------------------------

@@ -9,8 +9,8 @@ const assert = std.debug.assert;
 
 const debugtrace = @import("debugtrace.zig");
 const ReverseIter = @import("util.zig").ReverseIter;
-const Lexer =  @import("lex.zig").Lexer;
-const Lexeme =  @import("lex.zig").Lexeme;
+const Lexer = @import("lex.zig").Lexer;
+const Lexeme = @import("lex.zig").Lexeme;
 const Terminal = @import("grammar.zig").Terminal;
 const Symbol = @import("grammar.zig").Symbol;
 const ParseTree = @import("ParseTree.zig");
@@ -29,7 +29,7 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
 
     var lexemes: std.MultiArrayList(Lexeme) = .{};
     try lexemes.ensureTotalCapacity(allocator, source.len / 8);
-    try lexemes.append(allocator, .{.terminal = .@"<ERR>", .str = "<ERR>"}); // dummy <ERR> lexeme
+    try lexemes.append(allocator, .{ .terminal = .@"<ERR>", .str = "<ERR>" }); // dummy <ERR> lexeme
     var lexer = Lexer.init(source);
     while (lexer.next()) |lexeme| {
         try lexemes.append(allocator, lexeme);
@@ -92,7 +92,7 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
     // main parsing loop
     while (true) {
         const state = parser.pop_state();
-        debugtrace.print("//~ | {s: ^20} '{s}' ", .{@tagName(state), parser.lex_strs[parser.lexi]});
+        debugtrace.print("//~ | {s: ^20} '{s}' ", .{ @tagName(state), parser.lex_strs[parser.lexi] });
 
         // TODO: check invalid terminals ??
         switch (state) {
@@ -101,7 +101,7 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
             .more_top_decl => {
                 while (parser.consume(.newline)) |_| {}
                 if (!parser.check(.eof)) {
-                    try parser.append_states(.{.top_decl, .more_top_decl});
+                    try parser.append_states(.{ .top_decl, .more_top_decl });
                 }
             },
 
@@ -112,7 +112,7 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
                 switch (parser.lexeme()) {
                     //.ky_var,
                     .ky_const => {
-                        try parser.append_states(.{.var_decl, .chained_var_decl, .terminator});
+                        try parser.append_states(.{ .var_decl, .chained_var_decl, .terminator });
                     },
                     else => {
                         try parser.diag(.expected_top_level_decl);
@@ -125,20 +125,15 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
             .var_decl => {
                 try parser.push(parser.lexi); // node.lexi
 
-                if (parser.consume(.ky_const)) |_| {}
-                else unreachable; // TODO: ky_var
+                if (parser.consume(.ky_const)) |_| {} else unreachable; // TODO: ky_var
 
-                try parser.append_states(.{
-                    .identifier_list,
-                    .expect_equal,
-                    .expr_list,
-                    .create_var_decl_node});
+                try parser.append_states(.{ .identifier_list, .expect_equal, .expr_list, .create_var_decl_node });
             },
 
             // => [SEMICOLON, .var_decl, .chained_var_decl]
             .chained_var_decl => {
                 if (parser.consume(.semicolon)) |_|
-                    try parser.append_states(.{.var_decl, .chained_var_decl})
+                    try parser.append_states(.{ .var_decl, .chained_var_decl })
                 else if (parser.check(.ky_const)) { // TODO: ky_var
                     try parser.diag(.undelimited_top_var);
                     if (parser.state_stack.items[parser.state_stack.items.len - 1] == .terminator)
@@ -149,8 +144,7 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
             // => [SEMICOLON], newline
             .terminator => {
                 _ = parser.consume(.semicolon);
-                if(parser.consume(.newline)) |_| {}
-                else if(!parser.check(.eof)) {
+                if (parser.consume(.newline)) |_| {} else if (!parser.check(.eof)) {
                     try parser.diag(.expected_newline);
                     // TODO: skip if lexeme start a top decl, or statement if in func
                 }
@@ -159,18 +153,16 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
             // => IDENTIFIER, .identifier_list_cont
             .identifier_list => {
                 try parser.new_count();
-                if(parser.check(.identifier)) {
+                if (parser.check(.identifier)) {
                     try parser.push(parser.lexi);
                     parser.inc_count();
                     parser.advance();
                     try parser.append_states(.{.identifier_list_cont});
-                }
-                else {
+                } else {
                     // var_decl, struct_field
                     try parser.diag_expected(.identifier);
                     switch (parser.lexeme()) {
-                        .comma,
-                        .equal => {
+                        .comma, .equal => {
                             try parser.push(dummy_lexi);
                             parser.inc_count();
                             try parser.append_states(.{.identifier_list_cont});
@@ -186,8 +178,8 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
 
             // => [COMMA, IDENTIFIER, .identifier_list_cont]
             .identifier_list_cont => {
-                if(parser.consume(.comma)) |_| {
-                    if(parser.check(.identifier)) {
+                if (parser.consume(.comma)) |_| {
+                    if (parser.check(.identifier)) {
                         debugtrace.print(": {s}", .{parser.lex_strs[parser.lexi]});
                         try parser.push(parser.lexi);
                         parser.inc_count();
@@ -197,8 +189,7 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
                         // var_decl, struct_field
                         try parser.diag_expected(.identifier);
                         switch (parser.lexeme()) {
-                            .comma,
-                            .equal => {
+                            .comma, .equal => {
                                 try parser.push(dummy_lexi);
                                 parser.inc_count();
                                 try parser.append_states(.{.identifier_list_cont});
@@ -235,7 +226,7 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
                     .colon_colon,
                     .primitive,
                     => {
-                        try parser.append_states(.{.expression, .expr_list_cont});
+                        try parser.append_states(.{ .expression, .expr_list_cont });
                         try parser.new_count();
                         parser.inc_count();
                     },
@@ -246,8 +237,7 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
                             try parser.new_count();
                             try parser.push(dummy_nodi);
                             parser.inc_count();
-                        }
-                        else {
+                        } else {
                             // TODO: possibly call next_statement, next_struct_field ...
                             parser.next_top_decl();
                         }
@@ -258,10 +248,9 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
             // => [COMMA, .expression, .expr_list_cont]
             .expr_list_cont => {
                 if (parser.consume(.comma)) |_| {
-                    try parser.append_states(.{.expression, .expr_list_cont});
+                    try parser.append_states(.{ .expression, .expr_list_cont });
                     parser.inc_count();
-                }
-                else {
+                } else {
                     try parser.push_count();
                     parser.restore_count();
                 }
@@ -280,15 +269,7 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
                     // .bang =>
                     //     try parser.state_stack.append(allocator, .unary_expr),
 
-                    .literal_int,
-                    .literal_float,
-                    .literal_hex,
-                    .literal_octal,
-                    .literal_binary,
-                    .literal_false,
-                    .literal_true,
-                    .literal_nil,
-                    .literal_string => {
+                    .literal_int, .literal_float, .literal_hex, .literal_octal, .literal_binary, .literal_false, .literal_true, .literal_nil, .literal_string => {
                         // TODO: typed literals
                         try parser.push_node(.{
                             .symbol = Symbol.init_literal(parser.lexeme()).?,
@@ -305,7 +286,7 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
                     // },
 
                     .lparen => {
-                        try parser.append_states(.{.expression, .close_paren});
+                        try parser.append_states(.{ .expression, .close_paren });
                         parser.advance();
                         try parser.push(prec); // store precedence to recover later
                         prec = 0;
@@ -314,20 +295,16 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
                     .primitive => {
                         try parser.push(parser.lexi); // primitive lexi
                         parser.advance();
-                        if (parser.consume(.colon)) |_| {}
-                        else try parser.diag_expected(.colon); // TODO: recover
+                        if (parser.consume(.colon)) |_| {} else try parser.diag_expected(.colon); // TODO: recover
                         if (parser.consume(.indent)) |_|
                             try parser.state_stack.append(allocator, .expect_unindent);
-                        try parser.append_states(.{.expression, .create_typed_expr_node});
+                        try parser.append_states(.{ .expression, .create_typed_expr_node });
                     },
 
                     else => {
                         try parser.diag(.expected_expression);
                         switch (parser.lexeme()) {
-                            .newline,
-                            .comma,
-                            .rparen,
-                            .semicolon => {
+                            .newline, .comma, .rparen, .semicolon => {
                                 try parser.push(dummy_nodi);
                                 _ = parser.pop_state(); // expr_cont
                             },
@@ -339,8 +316,7 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
 
             // => RPAREN
             .close_paren => {
-                if (parser.consume(.rparen)) |_| {}
-                else try parser.diag_expected(.rparen);
+                if (parser.consume(.rparen)) |_| {} else try parser.diag_expected(.rparen);
 
                 prec = parser.at(1); // restore prev precedence
                 // move result node, pop precedence
@@ -350,23 +326,7 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
 
             // => [BINOP, .expression]
             .expr_cont => switch (parser.lexeme()) {
-                .plus,
-                .minus,
-                .star,
-                .slash,
-                .percent,
-                .plus_plus,
-                .star_star,
-                .equal_equal,
-                .bang_equal,
-                .lesser,
-                .lesser_equal,
-                .greater,
-                .greater_equal,
-                .ampersand_ampersand,
-                .pipe_pipe,
-                .ky_and,
-                .ky_or => {
+                .plus, .minus, .star, .slash, .percent, .plus_plus, .star_star, .equal_equal, .bang_equal, .lesser, .lesser_equal, .greater, .greater_equal, .ampersand_ampersand, .pipe_pipe, .ky_and, .ky_or => {
                     if (prec < precedence(parser.lexeme())) {
                         try parser.push(parser.lexi); // operator
                         try parser.push(prec); // prev prec
@@ -375,7 +335,8 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
                         try parser.append_states(.{
                             .expression,
                             .create_binop_node, // uses previously pushed lexeme to determine operator
-                            .expr_cont});
+                            .expr_cont,
+                        });
                     }
                 },
                 else => {}, // end of expression
@@ -383,26 +344,11 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
 
             // => EQUAL
             .expect_equal => {
-                if (parser.consume(.equal)) |_| {}
-                else {
+                if (parser.consume(.equal)) |_| {} else {
                     // TODO: var decl missing initializer
                     try parser.diag_expected(.equal);
                     switch (parser.lexeme()) {
-                        .minus,
-                        .bang,
-                        .literal_int,
-                        .literal_float,
-                        .literal_hex,
-                        .literal_octal,
-                        .literal_binary,
-                        .literal_false,
-                        .literal_true,
-                        .literal_nil,
-                        .literal_string,
-                        .lparen,
-                        .identifier,
-                        .period,
-                        .colon_colon => {
+                        .minus, .bang, .literal_int, .literal_float, .literal_hex, .literal_octal, .literal_binary, .literal_false, .literal_true, .literal_nil, .literal_string, .lparen, .identifier, .period, .colon_colon => {
                             //
                         },
                         else => parser.next_top_decl(),
@@ -412,8 +358,7 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
 
             // => UNINDENT
             .expect_unindent => {
-                if (parser.consume(.unindent)) |_| {}
-                else {
+                if (parser.consume(.unindent)) |_| {} else {
                     try parser.diag_expected(.unindent);
                     // TODO: recover
                 }
@@ -482,7 +427,6 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
                 }
                 parser.popn(identifier_count);
 
-
                 try parser.push_node(.{
                     .symbol = .var_decl,
                     .lexi = parser.pop(),
@@ -532,13 +476,12 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
 ///  active parsing state and helper funcs
 ///
 const Parser = struct {
-
     allocator: std.mem.Allocator,
     lexi: LexemeIndex, // index for current lexeme
     lex_terminals: []const Terminal,
     lex_strs: [][]const u8,
     state_stack: std.ArrayListUnmanaged(Parser.State),
-    work_stack: std.ArrayListUnmanaged(usize),  // temporary workspace for building nodes
+    work_stack: std.ArrayListUnmanaged(usize), // temporary workspace for building nodes
     counts: std.ArrayListUnmanaged(usize),
     indent_stack: std.ArrayListUnmanaged(usize),
     nodes: std.MultiArrayList(Node),
@@ -564,7 +507,7 @@ const Parser = struct {
     ///  returns next lexeme's type
     ///
     pub fn peek(this: Parser) Terminal {
-        if(this.lexi + 1 >= this.lexeme_ty.len)
+        if (this.lexi + 1 >= this.lexeme_ty.len)
             return .eof;
         return this.lex_terminals[this.lexi + 1];
     }
@@ -739,19 +682,16 @@ const Parser = struct {
             if (next) {
                 switch (this.lexeme()) {
                     .newline => {},
-                    else => return
+                    else => return,
                 }
-            }
-            else if (lvl <= 1)
+            } else if (lvl <= 1)
                 switch (this.lexeme()) {
                     .ky_const => return,
-                    .newline,
-                    .semicolon => next = true,
-                    else => {}
+                    .newline, .semicolon => next = true,
+                    else => {},
                 }
             else {
-                if (this.lexeme() == .indent) lvl += 1
-                else if (this.lexeme() == .unindent) lvl -= 1;
+                if (this.lexeme() == .indent) lvl += 1 else if (this.lexeme() == .unindent) lvl -= 1;
             }
         }
     }
@@ -787,7 +727,7 @@ const Parser = struct {
         @setCold(true);
         try this.diagnostics.append(this.allocator, msg);
         debugtrace.print(" !> error: {s}", .{@tagName(msg.tag)});
-        if(msg.expected) |expected|
+        if (msg.expected) |expected|
             debugtrace.print(": .{s}", .{@tagName(expected)});
         debugtrace.print(" ({s})", .{@tagName(this.lex_terminals[msg.lexi])});
     }

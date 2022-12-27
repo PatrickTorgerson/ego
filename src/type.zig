@@ -10,13 +10,7 @@ const std = @import("std");
 ///  represents an ego data type
 ///
 pub const Type = union(enum) {
-
-    pub const Primitive = enum {
-        @"u8", @"u16", @"u32", @"u64", @"u128",
-        @"i8", @"i16", @"i32", @"i64", @"i128",
-        @"f16", @"f32", @"f64", @"f128",
-        @"bool"
-    };
+    pub const Primitive = enum { @"u8", @"u16", @"u32", @"u64", @"u128", @"i8", @"i16", @"i32", @"i64", @"i128", @"f16", @"f32", @"f64", @"f128", @"bool" };
 
     primitive: Primitive,
 
@@ -34,8 +28,6 @@ pub const Type = union(enum) {
     pub fn active_tag(this: Type) std.meta.Tag(Type) {
         return std.meta.activeTag(this);
     }
-
-
 };
 
 ///----------------------------------------------------------------------
@@ -57,8 +49,8 @@ pub const TypeTable = struct {
     ///
     pub fn add_type(this: *TypeTable, allocator: std.mem.Allocator, ty: Type) !Index {
         // TODO: better search
-        for (this.types.items) |t,i| {
-            if(ty.eql(t))
+        for (this.types.items) |t, i| {
+            if (ty.eql(t))
                 return i;
         }
         try this.types.append(allocator, ty);
@@ -116,23 +108,9 @@ pub const TypeTable = struct {
     pub fn is_numeric(this: TypeTable, tid: usize) !bool {
         if (tid >= this.types.items.len)
             return error.out_of_bounds;
-        return
-            this.types.items[tid].active_tag() == .primitive and switch (this.types.items[tid].primitive) {
-                .@"u8",
-                .@"u16",
-                .@"u32",
-                .@"u64",
-                .@"u128",
-                .@"i8",
-                .@"i16",
-                .@"i32",
-                .@"i64",
-                .@"i128",
-                .@"f16",
-                .@"f32",
-                .@"f64",
-                .@"f128" => true,
-                .@"bool" => false,
-            };
+        return this.types.items[tid].active_tag() == .primitive and switch (this.types.items[tid].primitive) {
+            .@"u8", .@"u16", .@"u32", .@"u64", .@"u128", .@"i8", .@"i16", .@"i32", .@"i64", .@"i128", .@"f16", .@"f32", .@"f64", .@"f128" => true,
+            .@"bool" => false,
+        };
     }
 };

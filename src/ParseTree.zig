@@ -140,5 +140,5 @@ fn lexeme(tree: ParseTree, nodi: NodeIndex) *Lexeme {
 ///  slice into data; tree.data[ offset .. offset + count ]
 ///
 fn data_slice(tree: ParseTree, offset: usize, count: usize) []usize {
-    return tree.data[ offset .. offset + count ];
+    return tree.data[offset .. offset + count];
 }
