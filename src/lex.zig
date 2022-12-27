@@ -586,6 +586,8 @@ const keywords = std.ComptimeStringMap(Terminal, .{
     .{ "pub", .ky_pub },
     .{ "error", .ky_error },
     .{ "end", .ky_end },
+    .{ "mod", .ky_mod },
+    .{ "this", .ky_this },
     .{ "and", .ky_and },
     .{ "or", .ky_or },
     .{ "true", .literal_true },

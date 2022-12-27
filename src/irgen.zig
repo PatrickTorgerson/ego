@@ -285,7 +285,8 @@ const IrGen = struct {
                 try gen.append_states(.{ .node, .node });
             },
 
-            .mod,
+            .name,
+            .modulo,
             .concat,
             .arrmul,
             .equals,

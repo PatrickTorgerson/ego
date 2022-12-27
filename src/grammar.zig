@@ -13,6 +13,7 @@ pub const Symbol = enum(i32) {
     module,
     var_decl,
     typed_expr,
+    name,
 
     // literals
     // NOTE: order is important here, see Symbol.init_literal()
@@ -32,7 +33,7 @@ pub const Symbol = enum(i32) {
     sub,
     mul,
     div,
-    mod,
+    modulo,
     concat,
     arrmul,
     equals,
@@ -133,6 +134,8 @@ pub const Terminal = enum(i32) {
     ky_pub,
     ky_error,
     ky_end,
+    ky_mod,
+    ky_this,
 
     // literals
     // NOTE: order is important here, see Symbol.init_literal()
@@ -213,4 +216,12 @@ pub const BinaryOpNode = struct {
 pub const TypedExprNode = struct {
     primitive: LexemeIndex,
     expr: NodeIndex,
+};
+
+///-----------------------------------------------------
+///  layout for a name node
+///
+pub const NameNode = struct {
+    namespaces: []LexemeIndex,
+    fields: []LexemeIndex,
 };

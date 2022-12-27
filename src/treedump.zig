@@ -78,7 +78,7 @@ pub const ParseTreeIterator = struct {
             .sub,
             .mul,
             .div,
-            .mod,
+            .modulo,
             .concat,
             .arrmul,
             .equals,
@@ -96,6 +96,7 @@ pub const ParseTreeIterator = struct {
                 try self.push(data.rhs, top.depth + 1);
                 try self.push(data.lhs, top.depth + 1);
             },
+            .name,
             .literal_int,
             .literal_float,
             .literal_hex,
@@ -167,11 +168,24 @@ pub fn dump(allocator: std.mem.Allocator, out_writer: anytype, tree: ParseTree, 
                         try out_writer.writeByte(',');
                 }
             },
+            .name => {
+                const data = tree.as_name(node.nodi);
+                try out_writer.writeAll(": ");
+                for (data.namespaces) |lexi| {
+                    try out_writer.writeAll(strs[lexi]);
+                    try out_writer.writeAll("::");
+                }
+                for (data.fields) |lexi,i| {
+                    try out_writer.writeAll(strs[lexi]);
+                    if (i != data.fields.len - 1)
+                        try out_writer.writeByte('.');
+                }
+            },
             .add,
             .sub,
             .mul,
             .div,
-            .mod,
+            .modulo,
             .concat,
             .arrmul,
             .equals,

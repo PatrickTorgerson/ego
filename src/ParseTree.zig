@@ -130,6 +130,22 @@ pub fn as_typed_expr(tree: ParseTree, nodi: NodeIndex) grammar.TypedExprNode {
 }
 
 ///-----------------------------------------------------
+///  decodes a name node
+///
+pub fn as_name(tree: ParseTree, nodi: NodeIndex) grammar.NameNode {
+    assert(tree.nodes.items(.symbol)[nodi] == .name);
+    // data: namespace_count, namespace lexis..., field_count, field lexis...
+    const offset = tree.nodes.items(.offset)[nodi];
+    const namespace_count = tree.data[offset];
+    const field_start = offset + 1 + namespace_count;
+    const field_count = tree.data[field_start];
+    return .{
+        .namespaces = tree.data_slice(offset + 1, namespace_count),
+        .fields = tree.data_slice(field_start + 1, field_count),
+    };
+}
+
+///-----------------------------------------------------
 ///  returns main lexeme for not at index `nodi`
 ///
 fn lexeme(tree: ParseTree, nodi: NodeIndex) *Lexeme {
