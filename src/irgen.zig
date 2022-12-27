@@ -42,6 +42,7 @@ pub fn gen_ir(allocator: std.mem.Allocator, tree: ParseTree) !Ir {
         .decls = .{},
         .namespaces = .{},
         .uninitialized = .{},
+        .operand_stack = .{},
         .type_context = null,
         .typetable = .{},
     };
@@ -52,6 +53,7 @@ pub fn gen_ir(allocator: std.mem.Allocator, tree: ParseTree) !Ir {
     defer gen.namespaces.deinit(allocator);
     defer gen.stringcache.deinit(allocator);
     defer gen.uninitialized.deinit(allocator);
+    defer gen.operand_stack.deinit(allocator);
     defer gen.typetable.deinit(allocator);
 
     // TODO: better estimations
@@ -60,6 +62,7 @@ pub fn gen_ir(allocator: std.mem.Allocator, tree: ParseTree) !Ir {
     try gen.decls.ensureTotalCapacity(allocator, 3);
     try gen.namespaces.ensureTotalCapacity(allocator, 3);
     try gen.uninitialized.ensureTotalCapacity(allocator, 3);
+    try gen.operand_stack.ensureTotalCapacity(allocator, 3);
     try gen.stringcache.buffer.ensureTotalCapacity(allocator, 3);
     try gen.stringcache.slices.ensureTotalCapacity(allocator, 3);
 
@@ -88,16 +91,24 @@ pub fn gen_ir(allocator: std.mem.Allocator, tree: ParseTree) !Ir {
                 else break;
             },
 
+            // initialize next uninitialized decl wiht top of operand_stack
             .init_var => {
+                std.debug.assert(gen.operand_stack.items.len >= 1);
+                const init = gen.operand_stack.pop();
                 const deci = gen.uninitialized.pop();
                 debugtrace.print(": {s}", .{gen.stringcache.get(gen.decls.items[deci].name)});
                 gen.decls.items[deci].data = .{ .variable = .{ .ty = gen.type_context.? } };
-                try gen.instructions.append(allocator, .{
-                    .op = .set,
-                    .data = .{ .bin = .{ .l = gen.decls.items[deci].ins, .r = gen.instructions.items.len - 1 } },
+                try gen.write_ins(.set, .{
+                    .l = gen.decls.items[deci].ins,
+                    .r = init
                 });
                 gen.type_context = null;
             },
+
+            .add => try gen.binop_ins(.add),
+            .sub => try gen.binop_ins(.sub),
+            .mul => try gen.binop_ins(.mul),
+            .div => try gen.binop_ins(.div),
 
             .node => try gen.do_node(gen.node_stack.pop()),
         }
@@ -131,6 +142,7 @@ const IrGen = struct {
     namespaces: std.ArrayListUnmanaged(Ir.Namespace),
     /// uninitialized variables
     uninitialized: std.ArrayListUnmanaged(Ir.DeclIndex),
+    operand_stack: std.ArrayListUnmanaged(Ir.InsIndex),
     /// type of expression context
     type_context: ?TypeTable.Index,
     typetable: TypeTable,
@@ -141,7 +153,18 @@ const IrGen = struct {
     pub const State = enum {
         node,
         init_var,
+        add, sub, mul, div,
         next_top_decl,
+
+        pub fn init_binop(sym: Symbol) State {
+            return switch (sym) {
+                .add => .add,
+                .sub => .sub,
+                .mul => .mul,
+                .div => .div,
+                else => unreachable, // expected binop symbol
+            };
+        }
     };
 
     ///----------------------------------------------------------------------
@@ -189,22 +212,22 @@ const IrGen = struct {
 
             .literal_int => {
                 if (gen.type_context) |ty_ctx| {
-                    const lexi = gen.tree.nodes.items(.lexi)[nodi];
-                    const val = try std.fmt.parseInt(i256, gen.lex_strs[lexi], 0);
                     if (try gen.typetable.is_numeric(ty_ctx)) {
+                        const lexi = gen.tree.nodes.items(.lexi)[nodi];
+                        const val = std.fmt.parseInt(i129, gen.lex_strs[lexi], 0) catch unreachable; // invalid int
                         switch (gen.typetable.get(ty_ctx).?) {
                             .primitive => |p| {
                                 if (val_fits_in_primitive(val, p)) switch (p) {
-                                    .@"u8" => try gen.instructions.append(gen.allocator, .{ .op = .@"u8", .data = .{ .@"u8" = @intCast(u8, val)}}),
-                                    .@"u16" => try gen.instructions.append(gen.allocator, .{ .op = .@"u16", .data = .{ .@"u16" = @intCast(u16, val)}}),
-                                    .@"u32" => try gen.instructions.append(gen.allocator, .{ .op = .@"u32", .data = .{ .@"u32" = @intCast(u32, val)}}),
-                                    .@"u64" => try gen.instructions.append(gen.allocator, .{ .op = .@"u64", .data = .{ .@"u64" = @intCast(u64, val)}}),
-                                    .@"u128" => try gen.instructions.append(gen.allocator, .{ .op = .@"u128", .data = .{ .@"u128" = @intCast(u128, val)}}),
-                                    .@"i8" => try gen.instructions.append(gen.allocator, .{ .op = .@"i8", .data = .{ .@"i8" = @intCast(i8, val)}}),
-                                    .@"i16" => try gen.instructions.append(gen.allocator, .{ .op = .@"i16", .data = .{ .@"i16" = @intCast(i16, val)}}),
-                                    .@"i32" => try gen.instructions.append(gen.allocator, .{ .op = .@"i32", .data = .{ .@"i32" = @intCast(i32, val)}}),
-                                    .@"i64" => try gen.instructions.append(gen.allocator, .{ .op = .@"i64", .data = .{ .@"i64" = @intCast(i64, val)}}),
-                                    .@"i128" => try gen.instructions.append(gen.allocator, .{ .op = .@"i128", .data = .{ .@"i128" = @intCast(i128, val)}}),
+                                    .@"u8" => try gen.immediate_ins(.@"u8", @intCast(u8, val)),// gen.instructions.append(gen.allocator, .{ .op = .@"u8", .data = .{ .@"u8" = @intCast(u8, val)}}),
+                                    .@"u16" => try gen.immediate_ins(.@"u16", @intCast(u16, val)),// gen.instructions.append(gen.allocator, .{ .op = .@"u16", .data = .{ .@"u16" = @intCast(u16, val)}}),
+                                    .@"u32" => try gen.immediate_ins(.@"u32", @intCast(u32, val)),// gen.instructions.append(gen.allocator, .{ .op = .@"u32", .data = .{ .@"u32" = @intCast(u32, val)}}),
+                                    .@"u64" => try gen.immediate_ins(.@"u64", @intCast(u64, val)),// gen.instructions.append(gen.allocator, .{ .op = .@"u64", .data = .{ .@"u64" = @intCast(u64, val)}}),
+                                    .@"u128" => try gen.immediate_ins(.@"u128", @intCast(u128, val)),// gen.instructions.append(gen.allocator, .{ .op = .@"u128", .data = .{ .@"u128" = @intCast(u128, val)}}),
+                                    .@"i8" => try gen.immediate_ins(.@"i8", @intCast(i8, val)),// gen.instructions.append(gen.allocator, .{ .op = .@"i8", .data = .{ .@"i8" = @intCast(i8, val)}}),
+                                    .@"i16" => try gen.immediate_ins(.@"i16", @intCast(i16, val)),// gen.instructions.append(gen.allocator, .{ .op = .@"i16", .data = .{ .@"i16" = @intCast(i16, val)}}),
+                                    .@"i32" => try gen.immediate_ins(.@"i32", @intCast(i32, val)),// gen.instructions.append(gen.allocator, .{ .op = .@"i32", .data = .{ .@"i32" = @intCast(i32, val)}}),
+                                    .@"i64" => try gen.immediate_ins(.@"i64", @intCast(i64, val)),// gen.instructions.append(gen.allocator, .{ .op = .@"i64", .data = .{ .@"i64" = @intCast(i64, val)}}),
+                                    .@"i128" => try gen.immediate_ins(.@"i128", @intCast(i128, val)),// gen.instructions.append(gen.allocator, .{ .op = .@"i128", .data = .{ .@"i128" = @intCast(i128, val)}}),
                                     .@"f16",
                                     .@"f32",
                                     .@"f64",
@@ -215,7 +238,7 @@ const IrGen = struct {
                             },
                             //else => unreachable, // ERR: type mismatch
                         }
-                    }
+                    } else unreachable; // ERR: type mismatch
                 }
                 else unreachable; // ERR: cannot infer type
             },
@@ -223,7 +246,14 @@ const IrGen = struct {
             .add,
             .sub,
             .mul,
-            .div,
+            .div => {
+                const data = gen.tree.as_binop(nodi);
+                try gen.node_stack.append(gen.allocator, data.rhs);
+                try gen.node_stack.append(gen.allocator, data.lhs);
+                try gen.state_stack.append(gen.allocator, State.init_binop(gen.node_syms[nodi]));
+                try gen.append_states(.{.node, .node});
+            },
+
             .mod,
             .concat,
             .arrmul,
@@ -265,6 +295,102 @@ const IrGen = struct {
         inline while (i != 0) : (i -= 1)
             try gen.state_stack.append(gen.allocator, @as(IrGen.State, @field(states, fields[i].name)));
         try gen.state_stack.append(gen.allocator, @as(IrGen.State, @field(states, fields[0].name)));
+    }
+
+    ///----------------------------------------------------------------------
+    ///  appends an ir instruction to the ins buffer
+    ///
+    fn write_ins(
+        gen: *IrGen,
+        comptime op: Ir.Op,
+        data: switch(op) {
+            .@"u8" => u8,
+            .@"u16" => u16,
+            .@"u32" => u32,
+            .@"u64" => u64,
+            .@"u128" => u128,
+            .@"i8" => i8,
+            .@"i16" => i16,
+            .@"i32" => i32,
+            .@"i64" => i64,
+            .@"i128" => i128,
+            .@"f16" => f16,
+            .@"f32" => f32,
+            .@"f64" => f64,
+            .@"f128" => f128,
+            .@"bool" => bool,
+            .global => Ir.DeclIndex,
+            .set, .get, .add,
+            .sub, .mul, .div => Ir.Data.Bin,
+        }
+    ) !void {
+        try switch (op) {
+            .@"u8" => gen.instructions.append(gen.allocator, .{ .op = op, .data = .{ .@"u8" = data }}),
+            .@"u16" => gen.instructions.append(gen.allocator, .{ .op = op, .data = .{ .@"u16" = data }}),
+            .@"u32" => gen.instructions.append(gen.allocator, .{ .op = op, .data = .{ .@"u32" = data }}),
+            .@"u64" => gen.instructions.append(gen.allocator, .{ .op = op, .data = .{ .@"u64" = data }}),
+            .@"u128" => gen.instructions.append(gen.allocator, .{ .op = op, .data = .{ .@"u128" = data }}),
+            .@"i8" => gen.instructions.append(gen.allocator, .{ .op = op, .data = .{ .@"i8" = data }}),
+            .@"i16" => gen.instructions.append(gen.allocator, .{ .op = op, .data = .{ .@"i16" = data }}),
+            .@"i32" => gen.instructions.append(gen.allocator, .{ .op = op, .data = .{ .@"i32" = data }}),
+            .@"i64" => gen.instructions.append(gen.allocator, .{ .op = op, .data = .{ .@"i64" = data }}),
+            .@"i128" => gen.instructions.append(gen.allocator, .{ .op = op, .data = .{ .@"i128" = data }}),
+            .@"f16" => gen.instructions.append(gen.allocator, .{ .op = op, .data = .{ .@"f16" = data }}),
+            .@"f32" => gen.instructions.append(gen.allocator, .{ .op = op, .data = .{ .@"f32" = data }}),
+            .@"f64" => gen.instructions.append(gen.allocator, .{ .op = op, .data = .{ .@"f64" = data }}),
+            .@"f128" => gen.instructions.append(gen.allocator, .{ .op = op, .data = .{ .@"f128" = data }}),
+            .@"bool" => gen.instructions.append(gen.allocator, .{ .op = op, .data = .{ .@"bool" = data }}),
+            .global => gen.instructions.append(gen.allocator, .{ .op = op, .data = .{ .decl = data}}),
+            .set, .get, .add, .sub, .mul, .div
+                => gen.instructions.append(gen.allocator, .{ .op = op, .data = .{ .bin = data }}),
+        };
+    }
+
+    ///----------------------------------------------------------------------
+    ///  appends an immediate instruction to the ins buffer, and
+    ///  operand stack
+    ///
+    fn immediate_ins(gen: *IrGen, comptime op: Ir.Op, value: switch (op) {
+        .@"u8" => u8,
+        .@"u16" => u16,
+        .@"u32" => u32,
+        .@"u64" => u64,
+        .@"u128" => u128,
+        .@"i8" => i8,
+        .@"i16" => i16,
+        .@"i32" => i32,
+        .@"i64" => i64,
+        .@"i128" => i128,
+        .@"f16" => f16,
+        .@"f32" => f32,
+        .@"f64" => f64,
+        .@"f128" => f128,
+        .@"bool" => bool,
+        .global, .set, .get, .add,
+        .sub, .mul, .div => unreachable, // expected immediate op
+    }) !void {
+        try gen.write_ins(op, value);
+        try gen.operand_stack.append(gen.allocator, gen.instructions.items.len - 1);
+    }
+
+    ///----------------------------------------------------------------------
+    ///  appends an binop instruction to the ins buffer, using top 2
+    ///  operand stack entries as operand, and pushing result ins
+    ///
+    fn binop_ins(gen: *IrGen, comptime op: Ir.Op) !void {
+        std.debug.assert(gen.operand_stack.items.len >= 2);
+        std.debug.assert(switch (op) {
+            .add, .sub, .mul, .div => true,
+            else => false,
+        });
+
+        const rhs = gen.operand_stack.pop();
+        const lhs = gen.operand_stack.pop();
+        try gen.write_ins(op, .{
+            .l = lhs,
+            .r = rhs,
+        });
+        try gen.operand_stack.append(gen.allocator, gen.instructions.items.len - 1);
     }
 
     ///----------------------------------------------------------------------
@@ -316,7 +442,7 @@ const IrGen = struct {
     ///----------------------------------------------------------------------
     ///  determines if a value is within the range of primitive
     ///
-    fn val_fits_in_primitive(val: i256, primitive: Type.Primitive) bool {
+    fn val_fits_in_primitive(val: i129, primitive: Type.Primitive) bool {
         return switch (primitive) {
             .@"u8" => val >= std.math.minInt(u8) and val <= std.math.maxInt(u8),
             .@"u16" => val >= std.math.minInt(u16) and val <= std.math.maxInt(u16),

@@ -73,7 +73,7 @@ pub const Op = enum(u8) {
     @"f128",
     @"bool",
     global, // local
-    add, // sub, mul, div,
+    add, sub, mul, div,
     set, get,
 };
 
@@ -81,7 +81,7 @@ pub const Op = enum(u8) {
 ///  ir instruction payload, Ins.op determines active field
 ///
 pub const Data = union {
-    // imediates
+    // immediates
     @"u8": u8,
     @"u16": u16,
     @"u32": u32,
@@ -98,12 +98,13 @@ pub const Data = union {
     @"f128": f128,
     @"bool": bool,
 
-    bin: struct {
+    bin: Bin,
+    decl: DeclIndex,
+
+    pub const Bin = struct {
         l: InsIndex,
         r: InsIndex,
-    },
-
-    decl: DeclIndex,
+    };
 };
 
 ///----------------------------------------------------------------------

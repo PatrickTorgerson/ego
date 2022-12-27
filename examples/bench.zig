@@ -187,10 +187,8 @@ pub fn main() !void
                 .@"f128" => try out.print("{}", .{ins.data.@"f128"}),
                 .@"bool" => try out.print("{}", .{ins.data.@"bool"}),
                 .global => try out.print("'{s}'", .{ir.stringcache.get(ir.decls[ins.data.decl].name)}),
-                .set => try out.print("%{} %{}", .{ins.data.bin.l, ins.data.bin.r}),
-                .add,
-                .get,
-                => unreachable,
+                .add, .sub, .mul, .div,
+                .get, .set => try out.print("%{} %{}", .{ins.data.bin.l, ins.data.bin.r}),
             }
             try out.print("\n", .{});
         }
