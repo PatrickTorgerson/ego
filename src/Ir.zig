@@ -144,6 +144,10 @@ pub fn OpData(comptime op: Op) type {
 ///  free allocated memory
 ///
 pub fn deinit(this: *@This(), allocator: std.mem.Allocator) void {
+    for (this.namespaces) |*ns| {
+        ns.nested.deinit(allocator);
+        ns.decls.deinit(allocator);
+    }
     allocator.free(this.instructions);
     allocator.free(this.decls);
     allocator.free(this.namespaces);

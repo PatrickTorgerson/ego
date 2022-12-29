@@ -175,7 +175,7 @@ pub fn dump(allocator: std.mem.Allocator, out_writer: anytype, tree: ParseTree, 
                     try out_writer.writeAll(strs[lexi]);
                     try out_writer.writeAll("::");
                 }
-                for (data.fields) |lexi,i| {
+                for (data.fields) |lexi, i| {
                     try out_writer.writeAll(strs[lexi]);
                     if (i != data.fields.len - 1)
                         try out_writer.writeByte('.');

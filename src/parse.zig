@@ -295,11 +295,7 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
                         parser.advance();
                     },
 
-                    .colon_colon,
-                    .period,
-                    .ky_this,
-                    .ky_mod,
-                    .identifier => {
+                    .colon_colon, .period, .ky_this, .ky_mod, .identifier => {
                         try parser.append_states(.{.name});
                     },
 
@@ -387,28 +383,24 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
                     (parser.check(.identifier) and parser.check_next(.colon_colon)))
                 {
                     try parser.append_states(.{ .namespace_resolution, .field_resolution, .create_name_node });
-                }
-                else if (parser.consume(.ky_this)) |lexi| {
+                } else if (parser.consume(.ky_this)) |lexi| {
                     if (parser.consume(.period)) |_| {
                         try parser.push(0); // namespace count
                         try parser.new_count();
                         parser.inc_count();
                         try parser.push(lexi); // ky_this lexi
                         try parser.append_states(.{ .field_resolution, .create_name_node });
-                    }
-                    else {
+                    } else {
                         try parser.diag_expected(.period);
                         parser.next_top_decl();
                     }
-                }
-                else if (parser.consume(.period)) |_| {
+                } else if (parser.consume(.period)) |_| {
                     try parser.push(0); // namespace count
                     try parser.new_count();
                     parser.inc_count();
                     try parser.push(ky_this_lexi); // ky_this lexi
                     try parser.append_states(.{ .field_resolution, .create_name_node });
-                }
-                else {
+                } else {
                     try parser.push(0); // namespace count
                     try parser.new_count();
                     try parser.append_states(.{ .field_resolution, .create_name_node });
@@ -423,12 +415,10 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
                 if (parser.consume(.colon_colon)) |_| {
                     parser.inc_count();
                     try parser.push(ky_this_lexi);
-                }
-                else if (parser.consume(.ky_mod)) |lexi| {
+                } else if (parser.consume(.ky_mod)) |lexi| {
                     parser.inc_count();
                     try parser.push(lexi); // ky_mod lexi
-                    if (parser.consume(.colon_colon)) |_| {}
-                    else try parser.diag_expected(.colon_colon);
+                    if (parser.consume(.colon_colon)) |_| {} else try parser.diag_expected(.colon_colon);
                 }
                 try parser.append_states(.{.namespace_resolution_cont});
             },
@@ -441,8 +431,7 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
                     parser.advance(); // identifier
                     parser.advance(); // colon_colon
                     try parser.append_states(.{.namespace_resolution_cont});
-                }
-                else {
+                } else {
                     try parser.push_count();
                     parser.restore_count();
                     try parser.new_count(); // for field_resolution
@@ -456,13 +445,11 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
                     try parser.push(lexi);
                     if (parser.consume(.period)) |_| {
                         try parser.append_states(.{.field_resolution});
-                    }
-                    else {
+                    } else {
                         try parser.push_count();
                         parser.restore_count();
                     }
-                }
-                else {
+                } else {
                     try parser.diag_expected(.identifier);
                     parser.next_top_decl();
                 }
@@ -557,8 +544,6 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
                 parser.popn(expr_count);
 
                 const identifier_count = parser.pop();
-                std.debug.print("identifier_count: {}\n", .{identifier_count});
-                std.debug.print("expr_count: {}\n", .{expr_count});
                 try parser.data.append(allocator, identifier_count);
                 try parser.data.appendSlice(allocator, parser.top_slice(identifier_count));
                 if (debugtrace.trace_enabled()) {
@@ -580,12 +565,10 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
             // work_stack: field_count, field lexis..., namespace_count, namespace lexis...
             .create_name_node => {
                 const field_count = parser.pop();
-                std.debug.print("field_count: {}\n", .{field_count});
                 const field_lexis = parser.top_slice(field_count);
                 parser.popn(field_count);
                 std.debug.assert(field_count > 0);
                 const namespace_count = parser.pop();
-                std.debug.print("namespace_count: {}\n", .{namespace_count});
                 const namespace_lexis = parser.top_slice(namespace_count);
                 parser.popn(namespace_count);
                 const offset = parser.data.items.len;

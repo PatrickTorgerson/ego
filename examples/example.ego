@@ -5,72 +5,17 @@
 //~
 
 const pi = f64: 3.14159265358979
-const tao = pi * 2
+const toa = pi * 2.0
 
 //~
 //~--------------------------------------------------------
-//~  parser debug trace
+//~  intermediate representation
 //~--------------------------------------------------------
 //~
-//~ |    more_top_decl     '' 
-//~ |       top_decl       'const' 
-//~ |       var_decl       'const' 
-//~ |   identifier_list    'pi' 
-//~ | identifier_list_cont '=' 
-//~ |     expect_equal     '=' 
-//~ |      expr_list       'f64' 
-//~ |      expression      'f64' 
-//~ |      expression      '3.14159265358979' 
-//~ |      expr_cont       '' 
-//~ | create_typed_expr_node '' : f64
-//~ |      expr_cont       '' 
-//~ |    expr_list_cont    '' 
-//~ | create_var_decl_node '' : pi
-//~ |   chained_var_decl   '' 
-//~ |      terminator      '' 
-//~ |    more_top_decl     'const' 
-//~ |       top_decl       'const' 
-//~ |       var_decl       'const' 
-//~ |   identifier_list    'tao' 
-//~ | identifier_list_cont '=' 
-//~ |     expect_equal     '=' 
-//~ |      expr_list       'pi' 
-//~ |      expression      'pi' 
-//~ |         name         'pi' 
-//~ |   field_resolution   'pi' 
-//~ |   create_name_node   '*' 
-//~ |      expr_cont       '*' 
-//~ |      expression      '2' 
-//~ |      expr_cont       '' 
-//~ |  create_binop_node   '' : mul name literal_int
-//~ |      expr_cont       '' 
-//~ |    expr_list_cont    '' 
-//~ | create_var_decl_node '' : tao
-//~ |   chained_var_decl   '' 
-//~ |      terminator      '' 
-//~ |    more_top_decl     '' 
-//~ |         eof          '<EOF>' 
-//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-//~> state_stack cap: 20
-//~> work_stack cap: 8
-//~> counts cap: 8
-//~> indent_stack cap: 8
-//~> nodes cap: 20
-//~> data cap: 20
-//~> node count: 9
-//~> lexeme count: 151
-//~> source length: 2020
-//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-//~
-//~--------------------------------------------------------
-//~  parse tree
-//~--------------------------------------------------------
-//~
-//~ module
-//~  |- var_decl: pi
-//~  |   |- typed_expr: f64
-//~  |   |   |- literal_float: 3.14159265358979
-//~  |- var_decl: tao
-//~  |   |- mul
-//~  |   |   |- name: pi
-//~  |   |   |- literal_int: 2
+//~ %0 = global 'pi'
+//~ %1 = f64 3.14159265358979e+00
+//~ %2 = set %0 %1
+//~ %3 = global 'toa'
+//~ %4 = f64 2.0e+00
+//~ %5 = mul %0 %4
+//~ %6 = set %3 %5

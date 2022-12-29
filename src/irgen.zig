@@ -50,11 +50,17 @@ pub fn gen_ir(allocator: std.mem.Allocator, tree: ParseTree) !Ir {
     defer gen.state_stack.deinit(allocator);
     defer gen.instructions.deinit(allocator);
     defer gen.decls.deinit(allocator);
-    defer gen.namespaces.deinit(allocator);
     defer gen.stringcache.deinit(allocator);
     defer gen.uninitialized.deinit(allocator);
     defer gen.operand_stack.deinit(allocator);
     defer gen.typetable.deinit(allocator);
+    defer {
+        for (gen.namespaces.items) |*ns| {
+            ns.nested.deinit(allocator);
+            ns.decls.deinit(allocator);
+        }
+        gen.namespaces.deinit(allocator);
+    }
 
     // TODO: better estimations
     try gen.state_stack.ensureTotalCapacity(allocator, 3);
@@ -78,6 +84,12 @@ pub fn gen_ir(allocator: std.mem.Allocator, tree: ParseTree) !Ir {
     // initial states
     gen.state_stack.appendAssumeCapacity(.next_top_decl);
     gen.state_stack.appendAssumeCapacity(.node);
+    // gen.namespaces[0] is root module namespace
+    gen.namespaces.appendAssumeCapacity(.{
+        .name = try gen.stringcache.add(allocator, "mod"),
+        .nested = .{},
+        .decls = .{},
+    });
 
     while (true) {
         const state = gen.state_stack.pop();
@@ -182,8 +194,9 @@ const IrGen = struct {
                 var lexi_iter = ReverseIter(LexemeIndex).init(data.identifiers);
                 while (lexi_iter.next()) |lexi| {
                     const deci = gen.decls.items.len;
+                    const name = try gen.cache_lexi(lexi);
                     try gen.decls.append(gen.allocator, .{
-                        .name = try gen.cache_lexi(lexi),
+                        .name = name,
                         .ins = gen.instructions.items.len,
                         .data = .undef,
                     });
@@ -193,6 +206,9 @@ const IrGen = struct {
                         .data = .{ .decl = deci },
                     });
                     try gen.uninitialized.append(gen.allocator, deci);
+                    // assin to namespace
+                    // TODO: use current namespace, not 'mod'
+                    try gen.namespaces.items[0].decls.put(gen.allocator, name, deci);
                 }
                 // queue initializers
                 var nodi_iter = ReverseIter(NodeIndex).init(data.initializers);
@@ -285,7 +301,27 @@ const IrGen = struct {
                 try gen.append_states(.{ .node, .node });
             },
 
-            .name,
+            .name => {
+                // TODO: local look up if in fn
+                // TODO: global name look up
+                const data = gen.tree.as_name(nodi);
+                if (data.namespaces.len > 0)
+                    unreachable; // TODO: namespaces
+                if (data.fields.len > 1)
+                    unreachable; // TODO: field access
+                const name = try gen.cache_lexi(data.fields[0]);
+                if (gen.namespaces.items[0].decls.get(name)) |deci| {
+                    if (gen.type_context) |ty_ctx| {
+                        if (ty_ctx == gen.decls.items[deci].data.variable.ty) {
+                            try gen.operand_stack.append(gen.allocator, gen.decls.items[deci].ins);
+                        } else unreachable; // ERR: type mismatch
+                    } else {
+                        gen.type_context = gen.decls.items[deci].data.variable.ty;
+                        try gen.operand_stack.append(gen.allocator, gen.decls.items[deci].ins);
+                    }
+                } else unreachable; // ERR: use of undefined declaration
+            },
+
             .modulo,
             .concat,
             .arrmul,
