@@ -229,30 +229,10 @@ const IrGen = struct {
                 if (gen.type_context) |ty_ctx| {
                     if (gen.typetable.is_integral(ty_ctx)) {
                         const lexi = gen.tree.nodes.items(.lexi)[nodi];
-                        const val = std.fmt.parseInt(i129, gen.lex_strs[lexi], 0) catch unreachable; // invalid int
-                        switch (gen.typetable.get(ty_ctx).?) {
-                            .primitive => |p| {
-                                if (int_fits_in_primitive(val, p)) switch (p) {
-                                    .@"u8" => try gen.immediate_ins(.@"u8", @intCast(u8, val)),
-                                    .@"u16" => try gen.immediate_ins(.@"u16", @intCast(u16, val)),
-                                    .@"u32" => try gen.immediate_ins(.@"u32", @intCast(u32, val)),
-                                    .@"u64" => try gen.immediate_ins(.@"u64", @intCast(u64, val)),
-                                    .@"u128" => try gen.immediate_ins(.@"u128", @intCast(u128, val)),
-                                    .@"i8" => try gen.immediate_ins(.@"i8", @intCast(i8, val)),
-                                    .@"i16" => try gen.immediate_ins(.@"i16", @intCast(i16, val)),
-                                    .@"i32" => try gen.immediate_ins(.@"i32", @intCast(i32, val)),
-                                    .@"i64" => try gen.immediate_ins(.@"i64", @intCast(i64, val)),
-                                    .@"i128" => try gen.immediate_ins(.@"i128", @intCast(i128, val)),
-                                    .@"f16",
-                                    .@"f32",
-                                    .@"f64",
-                                    .@"f128",
-                                    .@"bool",
-                                    => unreachable, // ERR: type mismatch
-                                } else unreachable; // ERR: literal too large
-                            },
-                            //else => unreachable, // ERR: type mismatch
-                        }
+                        try gen.integral_immediate_ins(ty_ctx, gen.lex_strs[lexi]);
+                    } else if (gen.typetable.is_floating(ty_ctx)) {
+                        const lexi = gen.tree.nodes.items(.lexi)[nodi];
+                        try gen.floating_immediate_ins(ty_ctx, gen.lex_strs[lexi]);
                     } else unreachable; // ERR: type mismatch
                 } else unreachable; // ERR: cannot infer type
             },
@@ -261,30 +241,7 @@ const IrGen = struct {
                 if (gen.type_context) |ty_ctx| {
                     if (gen.typetable.is_floating(ty_ctx)) {
                         const lexi = gen.tree.nodes.items(.lexi)[nodi];
-                        const val = std.fmt.parseFloat(f128, gen.lex_strs[lexi]) catch unreachable; // invalid float
-                        switch (gen.typetable.get(ty_ctx).?) {
-                            .primitive => |p| {
-                                switch (p) {
-                                    .@"u8",
-                                    .@"u16",
-                                    .@"u32",
-                                    .@"u64",
-                                    .@"u128",
-                                    .@"i8",
-                                    .@"i16",
-                                    .@"i32",
-                                    .@"i64",
-                                    .@"i128",
-                                    .@"bool",
-                                    => unreachable, // ERR: type mismatch
-                                    .@"f16" => try gen.immediate_ins(.@"f16", @floatCast(f16, val)),
-                                    .@"f32" => try gen.immediate_ins(.@"f32", @floatCast(f32, val)),
-                                    .@"f64" => try gen.immediate_ins(.@"f64", @floatCast(f64, val)),
-                                    .@"f128" => try gen.immediate_ins(.@"f128", @floatCast(f128, val)),
-                                }
-                            },
-                            //else => unreachable, // ERR: type mismatch
-                        }
+                        try gen.floating_immediate_ins(ty_ctx, gen.lex_strs[lexi]);
                     } else unreachable; // ERR: type mismatch
                 } else unreachable; // ERR: cannot infer type
             },
@@ -439,6 +396,68 @@ const IrGen = struct {
             .r = rhs,
         });
         try gen.operand_stack.append(gen.allocator, gen.instructions.items.len - 1);
+    }
+
+    ///----------------------------------------------------------------------
+    ///  appends an immediate instruction from an integral str to the ins buffer
+    ///  pushes resulting ins index to operand_stack
+    ///
+    fn integral_immediate_ins(gen: *IrGen, ty_ctx: TypeTable.Index, str: []const u8) !void {
+        const val = std.fmt.parseInt(i129, str, 0) catch unreachable; // invalid int
+        switch (gen.typetable.get(ty_ctx).?) {
+            .primitive => |p| {
+                if (int_fits_in_primitive(val, p)) switch (p) {
+                    .@"u8" => try gen.immediate_ins(.@"u8", @intCast(u8, val)),
+                    .@"u16" => try gen.immediate_ins(.@"u16", @intCast(u16, val)),
+                    .@"u32" => try gen.immediate_ins(.@"u32", @intCast(u32, val)),
+                    .@"u64" => try gen.immediate_ins(.@"u64", @intCast(u64, val)),
+                    .@"u128" => try gen.immediate_ins(.@"u128", @intCast(u128, val)),
+                    .@"i8" => try gen.immediate_ins(.@"i8", @intCast(i8, val)),
+                    .@"i16" => try gen.immediate_ins(.@"i16", @intCast(i16, val)),
+                    .@"i32" => try gen.immediate_ins(.@"i32", @intCast(i32, val)),
+                    .@"i64" => try gen.immediate_ins(.@"i64", @intCast(i64, val)),
+                    .@"i128" => try gen.immediate_ins(.@"i128", @intCast(i128, val)),
+                    .@"f16",
+                    .@"f32",
+                    .@"f64",
+                    .@"f128",
+                    .@"bool",
+                    => unreachable, // ERR: type mismatch
+                } else unreachable; // ERR: literal too large
+            },
+            //else => unreachable, // ERR: type mismatch
+        }
+    }
+
+    ///----------------------------------------------------------------------
+    ///  appends an immediate instruction from an integral str to the ins buffer
+    ///  pushes resulting ins index to operand_stack
+    ///
+    fn floating_immediate_ins(gen: *IrGen, ty_ctx: TypeTable.Index, str: []const u8) !void {
+        const val = std.fmt.parseFloat(f128, str) catch unreachable; // invalid float
+        switch (gen.typetable.get(ty_ctx).?) {
+            .primitive => |p| {
+                switch (p) {
+                    .@"u8",
+                    .@"u16",
+                    .@"u32",
+                    .@"u64",
+                    .@"u128",
+                    .@"i8",
+                    .@"i16",
+                    .@"i32",
+                    .@"i64",
+                    .@"i128",
+                    .@"bool",
+                    => unreachable, // ERR: type mismatch
+                    .@"f16" => try gen.immediate_ins(.@"f16", @floatCast(f16, val)),
+                    .@"f32" => try gen.immediate_ins(.@"f32", @floatCast(f32, val)),
+                    .@"f64" => try gen.immediate_ins(.@"f64", @floatCast(f64, val)),
+                    .@"f128" => try gen.immediate_ins(.@"f128", @floatCast(f128, val)),
+                }
+            },
+            //else => unreachable, // ERR: type mismatch
+        }
     }
 
     ///----------------------------------------------------------------------
