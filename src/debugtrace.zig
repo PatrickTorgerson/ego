@@ -13,10 +13,8 @@ var mutex: std.Thread.Mutex = .{};
 var writer: ?GenericWriter = null;
 threadlocal var buffer: ?std.ArrayList(u8) = null;
 
-///----------------------------------------------------------------------
-///  set output writer for trace. expects null or writer
-///
-pub fn set_out_writer(out_writer: GenericWriter) void {
+/// set output writer for trace
+pub fn setOutWriter(out_writer: GenericWriter) void {
     if (builtin.mode == std.builtin.Mode.Debug) {
         mutex.lock();
         defer mutex.unlock();
@@ -24,10 +22,8 @@ pub fn set_out_writer(out_writer: GenericWriter) void {
     }
 }
 
-///----------------------------------------------------------------------
-///  set out writer to null, disabling traces
-///
-pub fn clear_out_writer() void {
+/// set out writer to null, disabling traces
+pub fn clearOutWriter() void {
     if (builtin.mode == std.builtin.Mode.Debug) {
         mutex.lock();
         defer mutex.unlock();
@@ -35,39 +31,31 @@ pub fn clear_out_writer() void {
     }
 }
 
-///----------------------------------------------------------------------
-///  init thread local buffer
-///
-pub fn init_buffer(allocator: std.mem.Allocator, capacity: usize) !void {
+/// init thread local buffer
+pub fn initBuffer(allocator: std.mem.Allocator, capacity: usize) !void {
     if (builtin.mode == std.builtin.Mode.Debug) {
         if (buffer != null) return;
         buffer = try std.ArrayList(u8).initCapacity(allocator, capacity);
     }
 }
 
-///----------------------------------------------------------------------
-///  deinit thread local buffer
-///
-pub fn deinit_buffer() void {
+/// deinit thread local buffer
+pub fn deinitBuffer() void {
     if (builtin.mode == std.builtin.Mode.Debug) {
         if (buffer) |b|
             b.deinit();
     }
 }
 
-///----------------------------------------------------------------------
-///  return true if debug trace is enabled
-///
-pub fn trace_enabled() bool {
+/// return true if debug trace is enabled
+pub fn traceEnabled() bool {
     if (builtin.mode == std.builtin.Mode.Debug) {
         return writer != null;
     } else return false;
 }
 
-///----------------------------------------------------------------------
-///  writes to thread local buffer, must call debugtrace.flush()
-///  to write buffer to out writer
-///
+/// writes to thread local buffer, must call debugtrace.flush()
+/// to write buffer to out writer
 pub fn print(comptime fmt: []const u8, args: anytype) void {
     if (builtin.mode == std.builtin.Mode.Debug) {
         if (writer == null) return;
@@ -75,9 +63,7 @@ pub fn print(comptime fmt: []const u8, args: anytype) void {
     }
 }
 
-///----------------------------------------------------------------------
 /// flushes thread local buffer to out writer
-///
 pub fn flush() !void {
     if (builtin.mode == std.builtin.Mode.Debug) {
         mutex.lock();
@@ -88,10 +74,8 @@ pub fn flush() !void {
     }
 }
 
-///----------------------------------------------------------------------
-///  writes directly to out writer
-///
-pub fn direct_print(comptime fmt: []const u8, args: anytype) void {
+/// writes directly to out writer
+pub fn directPrint(comptime fmt: []const u8, args: anytype) void {
     if (builtin.mode == std.builtin.Mode.Debug) {
         if (writer == null) return;
         mutex.lock();

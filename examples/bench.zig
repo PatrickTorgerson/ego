@@ -60,7 +60,7 @@ pub fn main() !void {
     while (args.next()) |arg| {
         if (std.mem.eql(u8, arg, "-o")) {
             if (args.next()) |out_path| {
-                out_file = try set_output(allocator, out_path);
+                out_file = try setOutput(allocator, out_path);
                 out = out_file.?.writer();
             } else {
                 std.debug.print("expected output file", .{});
@@ -68,7 +68,7 @@ pub fn main() !void {
             }
         } else if (std.mem.eql(u8, arg, "-i")) {
             if (args.next()) |src_path| {
-                src = try set_input(allocator, src_path);
+                src = try setInput(allocator, src_path);
                 deinit_src = true;
             } else {
                 std.debug.print("expected input file", .{});
@@ -76,9 +76,9 @@ pub fn main() !void {
             }
         } else if (std.mem.eql(u8, arg, "-io") or std.mem.eql(u8, arg, "-oi")) {
             if (args.next()) |io_path| {
-                src = try set_input(allocator, io_path);
+                src = try setInput(allocator, io_path);
                 deinit_src = true;
-                out_file = try set_output(allocator, io_path);
+                out_file = try setOutput(allocator, io_path);
                 out = out_file.?.writer();
             } else {
                 std.debug.print("expected input file", .{});
@@ -118,13 +118,13 @@ pub fn main() !void {
     }
 
     // set up debug trace
-    ego.debugtrace.set_out_writer(ego.util.GenericWriter.init(&out));
-    try ego.debugtrace.init_buffer(allocator, 128);
-    defer ego.debugtrace.deinit_buffer();
+    ego.debugtrace.setOutWriter(ego.util.GenericWriter.init(&out));
+    try ego.debugtrace.initBuffer(allocator, 128);
+    defer ego.debugtrace.deinitBuffer();
     defer ego.debugtrace.flush() catch {};
 
     try header(out, "source");
-    try dump_source(out, src);
+    try dumpSource(out, src);
 
     if (!trace_parse and
         !trace_sema and
@@ -133,8 +133,8 @@ pub fn main() !void {
 
     if (trace_parse) {
         try header(out, "parser debug trace");
-        ego.debugtrace.set_out_writer(ego.util.GenericWriter.init(&out));
-    } else ego.debugtrace.clear_out_writer();
+        ego.debugtrace.setOutWriter(ego.util.GenericWriter.init(&out));
+    } else ego.debugtrace.clearOutWriter();
 
     // -- parse --
     var tree = try ego.parse.parse(allocator, src);
@@ -143,7 +143,7 @@ pub fn main() !void {
 
     if (dump_ast) {
         try header(out, "parse tree");
-        ego.debugtrace.set_out_writer(ego.util.GenericWriter.init(&out));
+        ego.debugtrace.setOutWriter(ego.util.GenericWriter.init(&out));
         try tree.dump(allocator, out, .{
             .indent_prefix = "//~ ",
         });
@@ -164,11 +164,11 @@ pub fn main() !void {
 
     if (trace_sema) {
         try header(out, "semantic analysis debug trace");
-        ego.debugtrace.set_out_writer(ego.util.GenericWriter.init(&out));
-    } else ego.debugtrace.clear_out_writer();
+        ego.debugtrace.setOutWriter(ego.util.GenericWriter.init(&out));
+    } else ego.debugtrace.clearOutWriter();
 
     // -- ir gen --
-    var ir = try ego.irgen.gen_ir(allocator, tree);
+    var ir = try ego.irgen.genIr(allocator, tree);
     defer ir.deinit(allocator);
     try ego.debugtrace.flush();
 
@@ -202,14 +202,14 @@ pub fn main() !void {
 }
 
 ///
-fn set_input(allocator: std.mem.Allocator, path: []const u8) ![]const u8 {
+fn setInput(allocator: std.mem.Allocator, path: []const u8) ![]const u8 {
     var file = try std.fs.cwd().openFile(path, .{});
     defer file.close();
     return try file.reader().readAllAlloc(allocator, ~@as(usize, 0));
 }
 
 ///
-fn set_output(allocator: std.mem.Allocator, path: []const u8) !std.fs.File {
+fn setOutput(allocator: std.mem.Allocator, path: []const u8) !std.fs.File {
     const absolute = try std.fs.path.resolve(allocator, &[_][]const u8{path});
     defer allocator.free(absolute);
     std.debug.print("dumping to '{s}'\n", .{absolute});
@@ -219,7 +219,7 @@ fn set_output(allocator: std.mem.Allocator, path: []const u8) !std.fs.File {
 }
 
 /// dumps source to out ommiting prev dumps
-fn dump_source(out: anytype, src: []const u8) !void {
+fn dumpSource(out: anytype, src: []const u8) !void {
     var comment = false;
     for (src, 0..) |c, i| {
         if (comment) {

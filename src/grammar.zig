@@ -4,10 +4,8 @@
 //! ego uses the MIT license, see LICENSE for more information
 // ********************************************************************************
 
-///-------------------------------------------------------------------
-///  non-terminal symbols in the ego grammar,
-///  exhaustive list of node types
-///
+/// non-terminal symbols in the ego grammar,
+/// exhaustive list of node types
 pub const Symbol = enum(i32) {
     @"<ERR>",
     module,
@@ -47,7 +45,7 @@ pub const Symbol = enum(i32) {
     bool_and,
     bool_or,
 
-    pub fn init_literal(t: Terminal) ?Symbol {
+    pub fn initLiteral(t: Terminal) ?Symbol {
         const diff = @intFromEnum(Symbol.literal_int) - @intFromEnum(Terminal.literal_int);
         const i = @intFromEnum(t);
         if (i >= @intFromEnum(Terminal.literal_int) and i <= @intFromEnum(Terminal.literal_string)) {
@@ -55,7 +53,7 @@ pub const Symbol = enum(i32) {
         } else return null;
     }
 
-    pub fn init_binop(t: Terminal) ?Symbol {
+    pub fn initBinop(t: Terminal) ?Symbol {
         const diff = @intFromEnum(Symbol.add) - @intFromEnum(Terminal.plus);
         const i = @intFromEnum(t);
         if (i >= @intFromEnum(Terminal.plus) and i <= @intFromEnum(Terminal.ky_or)) {
@@ -63,21 +61,19 @@ pub const Symbol = enum(i32) {
         } else return null;
     }
 
-    pub fn is_binop(sym: Symbol) bool {
+    pub fn isBinop(sym: Symbol) bool {
         const i = @intFromEnum(sym);
         return i >= @intFromEnum(Symbol.add) and i <= @intFromEnum(Symbol.bool_or);
     }
 
-    pub fn is_literal(sym: Symbol) bool {
+    pub fn isLiteral(sym: Symbol) bool {
         const i = @intFromEnum(sym);
         return i >= @intFromEnum(Symbol.literal_int) and i <= @intFromEnum(Symbol.literal_string);
     }
 };
 
-///-------------------------------------------------------------------
-///  terminal symbols in the ego grammar,
-///  exhaustive list of lexeme types
-///
+/// terminal symbols in the ego grammar,
+/// exhaustive list of lexeme types
 pub const Terminal = enum(i32) {
     @"<ERR>" = -1,
 
@@ -104,16 +100,13 @@ pub const Terminal = enum(i32) {
 
     bang,
     tilde,
-
     equal,
     plus_equal,
     minus_equal,
     star_equal,
     slash_equal,
-
     identifier,
     primitive,
-
     ky_var,
     ky_const,
     ky_fn,
@@ -167,7 +160,6 @@ pub const Terminal = enum(i32) {
     unindent,
     comment,
     eof,
-
     invalid_unexpected_char,
     invalid_lonely_carriage_return,
     invalid_mixed_indentation,
@@ -186,41 +178,31 @@ pub const LexemeIndex = usize;
 pub const NodeIndex = usize;
 pub const DataIndex = usize;
 
-///-----------------------------------------------------
-///  layout for .module node
-///
+/// layout for .module node
 pub const ModuleNode = struct {
     top_decls: []NodeIndex,
 };
 
-///-----------------------------------------------------
-///  layout for .var_decl node
-///
+/// layout for .var_decl node
 pub const VarDeclNode = struct {
     identifiers: []LexemeIndex,
     initializers: []NodeIndex,
 };
 
-///-----------------------------------------------------
-///  layout for a binary op node
-///
+/// layout for a binary op node
 pub const BinaryOpNode = struct {
     op: Symbol,
     lhs: NodeIndex,
     rhs: NodeIndex,
 };
 
-///-----------------------------------------------------
-///  layout for a typed expression node
-///
+/// layout for a typed expression node
 pub const TypedExprNode = struct {
     primitive: LexemeIndex,
     expr: NodeIndex,
 };
 
-///-----------------------------------------------------
-///  layout for a name node
-///
+/// layout for a name node
 pub const NameNode = struct {
     namespaces: []LexemeIndex,
     fields: []LexemeIndex,

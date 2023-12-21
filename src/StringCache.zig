@@ -18,27 +18,21 @@ const Slice = struct {
     end: usize,
 };
 
-///----------------------------------------------------------------------
-///  free allocated memory
-///
+/// free allocated memory
 pub fn deinit(this: *StringCache, allocator: std.mem.Allocator) void {
     this.buffer.deinit(allocator);
     this.slices.deinit(allocator);
     this.* = undefined;
 }
 
-///----------------------------------------------------------------------
-///  get string from index
-///
+/// get string from index
 pub fn get(this: StringCache, index: Index) []const u8 {
     std.debug.assert(index < this.slices.items.len);
     const slice = this.slices.items[index];
     return this.buffer.items[slice.start..slice.end];
 }
 
-///----------------------------------------------------------------------
-///  add string to cache
-///
+/// add string to cache
 pub fn add(this: *StringCache, allocator: std.mem.Allocator, str: []const u8) !Index {
     // search
     // TODO: hash map lookup

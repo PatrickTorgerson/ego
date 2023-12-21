@@ -10,9 +10,7 @@ const Log2Int = std.math.Log2Int;
 
 pub const Opcode = enum(u8) {
     padding,
-
     const64, // ods: d = kst(s)
-
     // -- arithmatic
     addi, // odlr: d = l + r
     subi, // odlr: d = l - r
@@ -22,12 +20,9 @@ pub const Opcode = enum(u8) {
     subf, // odlr: d = l - r
     mulf, // odlr: d = l * r
     divf, // odlr: d = l / r
-
     // negf, modf,
     // negi, modi,
-
     mov64, // ods: d = s
-
     // seti, geti,
     // setf, getf,
     // itof, ftoi,
@@ -35,7 +30,6 @@ pub const Opcode = enum(u8) {
     // cmpi, cmpf,
     // eq, ne, lt, le, tru, fls,
     // jmp, jeq, jne, jlt, jle,
-
     call,
     ret,
 };
@@ -43,7 +37,7 @@ pub const Opcode = enum(u8) {
 pub const InstructionBuffer = struct {
     buffer: [*]const u8,
 
-    pub fn read_op(this: *InstructionBuffer) Opcode {
+    pub fn readOp(this: *InstructionBuffer) Opcode {
         while (this.buffer[0] == 0) // padding
             this.buffer += 1;
         const op = this.buffer[0];

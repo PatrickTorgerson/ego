@@ -9,23 +9,22 @@ const assert = std.debug.assert;
 
 const Terminal = @import("grammar.zig").Terminal;
 
-///----------------------------------------------------------------------
-///  stores information for a single lexeme
-///
+/// stores information for a single lexeme
 pub const Lexeme = struct {
     terminal: Terminal,
     str: []const u8,
 };
 
-///----------------------------------------------------------------------
-///  used to lex a single ego source file
-///
+/// used to lex a single ego source file
 pub const Lexer = struct {
     source: []const u8,
     pos: usize,
-    indent_char: IndentChar, // the type of whitespace used for indentation throughout a source file
-    global_indent: usize, // ego source files can have an arbitrary 'global indent' aplied to all lines
-    prev_indent: usize, // previous indent width, used to detect indents and unindents
+    /// the type of whitespace used for indentation throughout a source file
+    indent_char: IndentChar,
+    /// ego source files can have an arbitrary 'global indent' aplied to all lines
+    global_indent: usize,
+    /// previous indent width, used to detect indents and unindents
+    prev_indent: usize,
 
     const IndentChar = enum { tabs, spaces, unknown };
 
@@ -51,11 +50,7 @@ pub const Lexer = struct {
         comment,
     };
 
-    ///----------------------------------------------------------------------
-    ///  creates a Lexer, Lexer.indent_char may not be determined
-    ///  `source`: ego source code, lexer retains slice, must be kept
-    ///            in memory for lifetime of lexer
-    ///
+    /// `source` must be kept in memory for lifetime of lexer
     pub fn init(source: []const u8) Lexer {
         if (source.len == 0) return .{
             .source = source,
@@ -69,7 +64,7 @@ pub const Lexer = struct {
         var start: usize = if (std.mem.startsWith(u8, source, "\xEF\xBB\xBF")) 3 else 0;
 
         // skip leading newlines
-        while (skip_empty_line(source, start)) |new_start|
+        while (skipEmptyLine(source, start)) |new_start|
             start = new_start;
         if (start < source.len and source[start] == '\r') start += 1;
         if (start < source.len and source[start] == '\n') start += 1;
@@ -99,7 +94,7 @@ pub const Lexer = struct {
         // global indent, all subsequent lines must have equal indentation
         if (indent_char != .unknown) {
             var global_indent: usize = 0;
-            while (start < source.len and this.is_indent_char()) : (this.advance())
+            while (start < source.len and this.isIndentChar()) : (this.advance())
                 global_indent += 1;
             this.global_indent = global_indent;
             this.prev_indent = global_indent;
@@ -108,10 +103,8 @@ pub const Lexer = struct {
         return this;
     }
 
-    ///----------------------------------------------------------------------
-    ///  returns next lexeme in the source, or `null` if eof has been
-    ///  reached. last lexeme returned will always be .eof
-    ///
+    /// returns next lexeme in the source, or `null` if eof has been
+    /// reached. last lexeme returned will always be .eof
     pub fn next(lexer: *Lexer) ?Lexeme {
         if (lexer.pos > lexer.source.len)
             return null;
@@ -240,9 +233,9 @@ pub const Lexer = struct {
                 },
                 .newline => switch (c) {
                     ' ', '\t' => {
-                        if (!lexer.is_indent_char()) {
+                        if (!lexer.isIndentChar()) {
                             lexeme.terminal = .invalid_mixed_indentation;
-                            while (lexer.is_tab_or_space())
+                            while (lexer.isTabOrSpace())
                                 lexer.advance(); // include lexer.pos in lexeme.str
                             break;
                         }
@@ -388,7 +381,7 @@ pub const Lexer = struct {
                     // TODO: hex, octal, and binary literals
                     else => {
                         lexeme.terminal = .invalid_leading_zero;
-                        while (lexer.is_numeric_literal_char())
+                        while (lexer.isNumericLiteralChar())
                             lexer.advance();
                         break;
                     },
@@ -402,7 +395,7 @@ pub const Lexer = struct {
                     '0'...'9' => {},
                     'a'...'z', 'A'...'Z' => {
                         lexeme.terminal = .invalid_decimal_digit;
-                        while (lexer.is_numeric_literal_char())
+                        while (lexer.isNumericLiteralChar())
                             lexer.advance();
                         break;
                     },
@@ -411,13 +404,13 @@ pub const Lexer = struct {
                 .number_noquote => switch (c) {
                     '\'' => {
                         lexeme.terminal = .invalid_repeated_digit_seperator;
-                        while (lexer.is_numeric_literal_char())
+                        while (lexer.isNumericLiteralChar())
                             lexer.advance();
                         break;
                     },
                     '.' => {
                         lexeme.terminal = .invalid_period_following_digit_seperator;
-                        while (lexer.is_numeric_literal_char())
+                        while (lexer.isNumericLiteralChar())
                             lexer.advance();
                         break;
                     },
@@ -431,13 +424,13 @@ pub const Lexer = struct {
                     '\'' => state = .fractional_noquote,
                     '.' => {
                         lexeme.terminal = .invalid_extra_period_in_float;
-                        while (lexer.is_numeric_literal_char())
+                        while (lexer.isNumericLiteralChar())
                             lexer.advance();
                         break;
                     },
                     'a'...'z', 'A'...'Z' => {
                         lexeme.terminal = .invalid_decimal_digit;
-                        while (lexer.is_numeric_literal_char())
+                        while (lexer.isNumericLiteralChar())
                             lexer.advance();
                         break;
                     },
@@ -446,7 +439,7 @@ pub const Lexer = struct {
                 .fractional_noquote => switch (c) {
                     '\'' => {
                         lexeme.terminal = .invalid_repeated_digit_seperator;
-                        while (lexer.is_numeric_literal_char())
+                        while (lexer.isNumericLiteralChar())
                             lexer.advance();
                         break;
                     },
@@ -459,7 +452,7 @@ pub const Lexer = struct {
                     // TODO: unicode identifiers
                     'a'...'z', 'A'...'Z', '0'...'9', '_' => {},
                     else => {
-                        if (get_keyword(lexer.source[start..lexer.pos])) |keyword| {
+                        if (getKeyword(lexer.source[start..lexer.pos])) |keyword| {
                             lexeme.terminal = keyword;
                         }
                         break;
@@ -476,52 +469,40 @@ pub const Lexer = struct {
         return lexeme;
     }
 
-    ///----------------------------------------------------------------------
     /// return character at current position in source
-    ///
     fn at(this: Lexer) u8 {
         if (this.pos >= this.source.len)
             return 0;
         return this.source[this.pos];
     }
 
-    ///----------------------------------------------------------------------
     /// return character at next position in source
-    ///
     fn peek(this: Lexer) u8 {
         assert(this.at() != 0); // assert not EOF
         return this.source[this.pos + 1];
     }
 
-    ///----------------------------------------------------------------------
     /// advances current position in source by one
-    ///
     fn advance(this: *Lexer) void {
         this.pos += 1;
     }
 
-    ///----------------------------------------------------------------------
     /// returns if current character is a tab or a space
-    ///
-    fn is_tab_or_space(this: Lexer) bool {
+    fn isTabOrSpace(this: Lexer) bool {
         return this.at() == ' ' or this.at() == '\t';
     }
 
-    ///----------------------------------------------------------------------
     /// returns if current character is a digit or alpha character
-    ///
-    fn is_numeric_literal_char(this: Lexer) bool {
+    fn isNumericLiteralChar(this: Lexer) bool {
         return std.ascii.isAlphanumeric(this.at()) or
             this.at() == '.' or
             this.at() == '\'';
     }
 
-    ///----------------------------------------------------------------------
     ///  returns if current char is indent as defined by `Lexer.indent_char`.
     ///  if `Lexer.indent_char` is null and current char is tab or space
     ///  `Lexer.indent_char` will be set
-    ///
-    fn is_indent_char(this: *Lexer) bool {
+    fn isIndentChar(this: *Lexer) bool {
         return switch (this.indent_char) {
             .tabs => this.at() == '\t',
             .spaces => this.at() == ' ',
@@ -537,13 +518,11 @@ pub const Lexer = struct {
         };
     }
 
-    ///----------------------------------------------------------------------
     ///  skips over an empty line with possible trailing whitespace
     ///  end of skipped line is returned such that source[skip_empty_line()] == '\n'.
     ///  if the start is not the beggining of a line or the line is not
     ///  empty returns null.
-    ///
-    fn skip_empty_line(source: []const u8, start: usize) ?usize {
+    fn skipEmptyLine(source: []const u8, start: usize) ?usize {
         if (start >= source.len)
             return null;
 
@@ -562,9 +541,7 @@ pub const Lexer = struct {
     }
 };
 
-///----------------------------------------------------------------------
 ///  maps strings to keyword terminals, use fn get_keyword()
-///
 const keywords = std.ComptimeStringMap(Terminal, .{
     .{ "var", .ky_var },
     .{ "const", .ky_const },
@@ -609,10 +586,8 @@ const keywords = std.ComptimeStringMap(Terminal, .{
     .{ "bool", .primitive },
 });
 
-///----------------------------------------------------------------------
 ///  returns keyword terminal is string is a keyword, null otherwise
-///
-fn get_keyword(bytes: []const u8) ?Terminal {
+fn getKeyword(bytes: []const u8) ?Terminal {
     return keywords.get(bytes);
 }
 

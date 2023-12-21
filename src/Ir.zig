@@ -21,18 +21,14 @@ decls: []Decl = &[_]Decl{},
 /// storage for namespaces, 'namespaces[0]' is module's root namespace
 namespaces: []Namespace = &[_]Namespace{},
 
-///----------------------------------------------------------------------
-///  maps declarations and nested namespaces for an ego namespace
-///
+/// maps declarations and nested namespaces for an ego namespace
 pub const Namespace = struct {
     name: StringCache.Index,
     nested: std.AutoHashMapUnmanaged(StringCache.Index, NamespaceIndex),
     decls: std.AutoHashMapUnmanaged(StringCache.Index, DeclIndex),
 };
 
-///----------------------------------------------------------------------
-///  data for an ego declaration
-///
+/// data for an ego declaration
 pub const Decl = struct {
     name: StringCache.Index,
     ins: InsIndex,
@@ -44,17 +40,13 @@ pub const Decl = struct {
     },
 };
 
-///----------------------------------------------------------------------
-///  ir instruction
-///
+/// ir instruction
 pub const Ins = struct {
     op: Op,
     data: Data,
 };
 
-///----------------------------------------------------------------------
-///  ir operations
-///
+/// ir operations
 pub const Op = enum(u8) {
     u8,
     u16,
@@ -71,7 +63,8 @@ pub const Op = enum(u8) {
     f64,
     f128,
     bool,
-    global, // local
+    global,
+    // local,
     add,
     sub,
     mul,
@@ -80,9 +73,7 @@ pub const Op = enum(u8) {
     get,
 };
 
-///----------------------------------------------------------------------
-///  ir instruction payload, Ins.op determines active field
-///
+/// ir instruction payload, Ins.op determines active field
 pub const Data = union {
     // immediates
     u8: u8,
@@ -110,9 +101,7 @@ pub const Data = union {
     };
 };
 
-///----------------------------------------------------------------------
-///  return type of data for op
-///
+/// return type of data for op
 pub fn OpData(comptime op: Op) type {
     return switch (op) {
         .u8 => u8,
@@ -140,9 +129,6 @@ pub fn OpData(comptime op: Op) type {
     };
 }
 
-///----------------------------------------------------------------------
-///  free allocated memory
-///
 pub fn deinit(this: *@This(), allocator: std.mem.Allocator) void {
     for (this.namespaces) |*ns| {
         ns.nested.deinit(allocator);

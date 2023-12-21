@@ -21,10 +21,8 @@ const LexemeIndex = grammar.LexemeIndex;
 const NodeIndex = grammar.NodeIndex;
 const DataIndex = grammar.DataIndex;
 
-///----------------------------------------------------------------------
-///  generate ir from an ego AST
-///
-pub fn gen_ir(allocator: std.mem.Allocator, tree: ParseTree) !Ir {
+/// generate ir from an ego AST
+pub fn genIr(allocator: std.mem.Allocator, tree: ParseTree) !Ir {
     if (tree.diagnostics.len > 0)
         return error.invalid_ast;
     if (tree.nodes.len == 0)
@@ -74,7 +72,7 @@ pub fn gen_ir(allocator: std.mem.Allocator, tree: ParseTree) !Ir {
 
     // append top decls to node_stack
     // reverse so that they get popped off the stack in decending order
-    const mod = tree.as_module(0);
+    const mod = tree.asModule(0);
     try gen.node_stack.ensureTotalCapacity(allocator, mod.top_decls.len + 5);
     var iter = ReverseIter(ParseTree.NodeIndex).init(mod.top_decls);
     while (iter.next()) |nodi| {
@@ -98,7 +96,7 @@ pub fn gen_ir(allocator: std.mem.Allocator, tree: ParseTree) !Ir {
         switch (state) {
             .next_top_decl => {
                 if (gen.node_stack.items.len > 0) {
-                    try gen.append_states(.{ .node, .next_top_decl });
+                    try gen.appendStates(.{ .node, .next_top_decl });
                 } else break;
             },
 
@@ -109,19 +107,19 @@ pub fn gen_ir(allocator: std.mem.Allocator, tree: ParseTree) !Ir {
                 const deci = gen.uninitialized.pop();
                 debugtrace.print(": {s}", .{gen.stringcache.get(gen.decls.items[deci].name)});
                 gen.decls.items[deci].data = .{ .variable = .{ .ty = gen.type_context.? } };
-                try gen.write_ins(.set, .{
+                try gen.writeIns(.set, .{
                     .l = gen.decls.items[deci].ins,
                     .r = init,
                 });
                 gen.type_context = null;
             },
 
-            .add => try gen.binop_ins(.add),
-            .sub => try gen.binop_ins(.sub),
-            .mul => try gen.binop_ins(.mul),
-            .div => try gen.binop_ins(.div),
+            .add => try gen.binopIns(.add),
+            .sub => try gen.binopIns(.sub),
+            .mul => try gen.binopIns(.mul),
+            .div => try gen.binopIns(.div),
 
-            .node => try gen.do_node(gen.node_stack.pop()),
+            .node => try gen.doNode(gen.node_stack.pop()),
         }
 
         debugtrace.print("\n", .{});
@@ -137,9 +135,7 @@ pub fn gen_ir(allocator: std.mem.Allocator, tree: ParseTree) !Ir {
     };
 }
 
-///----------------------------------------------------------------------
-///  active ir state and helper funcs
-///
+/// active ir state and helper funcs
 const IrGen = struct {
     allocator: std.mem.Allocator,
     tree: *const ParseTree,
@@ -158,9 +154,7 @@ const IrGen = struct {
     type_context: ?TypeTable.Index,
     typetable: TypeTable,
 
-    ///----------------------------------------------------------------------
-    ///  enumeration of irgen states
-    ///
+    /// enumeration of irgen states
     pub const State = enum {
         node,
         init_var,
@@ -170,7 +164,7 @@ const IrGen = struct {
         div,
         next_top_decl,
 
-        pub fn init_binop(sym: Symbol) State {
+        pub fn initBinop(sym: Symbol) State {
             return switch (sym) {
                 .add => .add,
                 .sub => .sub,
@@ -181,20 +175,18 @@ const IrGen = struct {
         }
     };
 
-    ///----------------------------------------------------------------------
-    ///  generate ir for a single declaration
-    ///
-    pub fn do_node(gen: *IrGen, nodi: ParseTree.NodeIndex) !void {
+    /// generate ir for a single declaration
+    pub fn doNode(gen: *IrGen, nodi: ParseTree.NodeIndex) !void {
         debugtrace.print("'{s}'", .{@tagName(gen.node_syms[nodi])});
 
         switch (gen.node_syms[nodi]) {
             .var_decl => {
-                const data = gen.tree.as_vardecl(nodi);
+                const data = gen.tree.asVardecl(nodi);
                 // allocate declarations
                 var lexi_iter = ReverseIter(LexemeIndex).init(data.identifiers);
                 while (lexi_iter.next()) |lexi| {
                     const deci = gen.decls.items.len;
-                    const name = try gen.cache_lexi(lexi);
+                    const name = try gen.cacheLexi(lexi);
                     try gen.decls.append(gen.allocator, .{
                         .name = name,
                         .ins = gen.instructions.items.len,
@@ -214,35 +206,35 @@ const IrGen = struct {
                 var nodi_iter = ReverseIter(NodeIndex).init(data.initializers);
                 while (nodi_iter.next()) |init_nodi| {
                     try gen.node_stack.append(gen.allocator, init_nodi);
-                    try gen.append_states(.{ .node, .init_var });
+                    try gen.appendStates(.{ .node, .init_var });
                 }
             },
 
             .typed_expr => {
-                const data = gen.tree.as_typed_expr(nodi);
-                gen.type_context = try gen.primitive_from_lexi(data.primitive);
+                const data = gen.tree.asTypedExpr(nodi);
+                gen.type_context = try gen.primitiveFromLexi(data.primitive);
                 try gen.node_stack.append(gen.allocator, data.expr);
-                try gen.append_states(.{.node});
+                try gen.appendStates(.{.node});
             },
 
             .literal_int => {
                 if (gen.type_context) |ty_ctx| {
-                    if (gen.typetable.is_integral(ty_ctx)) {
+                    if (gen.typetable.isIntegral(ty_ctx)) {
                         const lexi = gen.tree.nodes.items(.lexi)[nodi];
-                        try gen.integral_immediate_ins(ty_ctx, gen.lex_strs[lexi]);
-                    } else if (gen.typetable.is_floating(ty_ctx)) {
+                        try gen.integralImmediateIns(ty_ctx, gen.lex_strs[lexi]);
+                    } else if (gen.typetable.isFloating(ty_ctx)) {
                         const lexi = gen.tree.nodes.items(.lexi)[nodi];
-                        try gen.floating_immediate_ins(ty_ctx, gen.lex_strs[lexi]);
+                        try gen.floatingImmediateIns(ty_ctx, gen.lex_strs[lexi]);
                     } else unreachable; // ERR: type mismatch
                 } else unreachable; // ERR: cannot infer type
             },
 
             .literal_float => {
                 if (gen.type_context) |ty_ctx| {
-                    if (gen.typetable.is_floating(ty_ctx)) {
+                    if (gen.typetable.isFloating(ty_ctx)) {
                         const lexi = gen.tree.nodes.items(.lexi)[nodi];
-                        try gen.floating_immediate_ins(ty_ctx, gen.lex_strs[lexi]);
-                    } else if (gen.typetable.is_integral(ty_ctx)) {
+                        try gen.floatingImmediateIns(ty_ctx, gen.lex_strs[lexi]);
+                    } else if (gen.typetable.isIntegral(ty_ctx)) {
                         // TODO: gen integral ins from whole number floating literals
                     } else unreachable; // ERR: type mismatch
                 } else unreachable; // ERR: cannot infer type
@@ -253,22 +245,22 @@ const IrGen = struct {
             .mul,
             .div,
             => {
-                const data = gen.tree.as_binop(nodi);
+                const data = gen.tree.asBinop(nodi);
                 try gen.node_stack.append(gen.allocator, data.rhs);
                 try gen.node_stack.append(gen.allocator, data.lhs);
-                try gen.state_stack.append(gen.allocator, State.init_binop(gen.node_syms[nodi]));
-                try gen.append_states(.{ .node, .node });
+                try gen.state_stack.append(gen.allocator, State.initBinop(gen.node_syms[nodi]));
+                try gen.appendStates(.{ .node, .node });
             },
 
             .name => {
                 // TODO: local look up if in fn
                 // TODO: global name look up
-                const data = gen.tree.as_name(nodi);
+                const data = gen.tree.asName(nodi);
                 if (data.namespaces.len > 0)
                     unreachable; // TODO: namespaces
                 if (data.fields.len > 1)
                     unreachable; // TODO: field access
-                const name = try gen.cache_lexi(data.fields[0]);
+                const name = try gen.cacheLexi(data.fields[0]);
                 if (gen.namespaces.items[0].decls.get(name)) |deci| {
                     if (gen.type_context) |ty_ctx| {
                         if (ty_ctx == gen.decls.items[deci].data.variable.ty) {
@@ -307,12 +299,10 @@ const IrGen = struct {
         }
     }
 
-    ///----------------------------------------------------------------------
-    ///  pushes states onto state stack in reverse order such that
-    ///  states get popped in order.
-    ///  `states`: tuple of `IrGen.State` fields
-    ///
-    fn append_states(gen: *IrGen, comptime states: anytype) !void {
+    /// pushes states onto state stack in reverse order such that
+    /// states get popped in order.
+    /// `states`: tuple of `IrGen.State` fields
+    fn appendStates(gen: *IrGen, comptime states: anytype) !void {
         const info = @typeInfo(@TypeOf(states));
         comptime std.debug.assert(std.meta.activeTag(info) == .Struct);
         comptime std.debug.assert(info.Struct.is_tuple == true);
@@ -324,10 +314,8 @@ const IrGen = struct {
         try gen.state_stack.append(gen.allocator, @as(IrGen.State, @field(states, fields[0].name)));
     }
 
-    ///----------------------------------------------------------------------
-    ///  appends an ir instruction to the ins buffer
-    ///
-    fn write_ins(gen: *IrGen, comptime op: Ir.Op, data: Ir.OpData(op)) !void {
+    /// appends an ir instruction to the ins buffer
+    fn writeIns(gen: *IrGen, comptime op: Ir.Op, data: Ir.OpData(op)) !void {
         const payload: Ir.Data = switch (op) {
             .u8 => .{ .u8 = data },
             .u16 => .{ .u16 = data },
@@ -352,11 +340,9 @@ const IrGen = struct {
         try gen.instructions.append(gen.allocator, .{ .op = op, .data = payload });
     }
 
-    ///----------------------------------------------------------------------
-    ///  appends an immediate instruction to the ins buffer, and
-    ///  operand stack
-    ///
-    fn immediate_ins(gen: *IrGen, comptime op: Ir.Op, value: Ir.OpData(op)) !void {
+    /// appends an immediate instruction to the ins buffer, and
+    /// operand stack
+    fn immediateIns(gen: *IrGen, comptime op: Ir.Op, value: Ir.OpData(op)) !void {
         std.debug.assert(switch (op) {
             .u8,
             .u16,
@@ -376,15 +362,13 @@ const IrGen = struct {
             => true,
             else => false,
         });
-        try gen.write_ins(op, value);
+        try gen.writeIns(op, value);
         try gen.operand_stack.append(gen.allocator, gen.instructions.items.len - 1);
     }
 
-    ///----------------------------------------------------------------------
-    ///  appends an binop instruction to the ins buffer, using top 2
-    ///  operand stack entries as operand, and pushing result ins
-    ///
-    fn binop_ins(gen: *IrGen, comptime op: Ir.Op) !void {
+    /// appends an binop instruction to the ins buffer, using top 2
+    /// operand stack entries as operand, and pushing result ins
+    fn binopIns(gen: *IrGen, comptime op: Ir.Op) !void {
         std.debug.assert(gen.operand_stack.items.len >= 2);
         std.debug.assert(switch (op) {
             .add, .sub, .mul, .div => true,
@@ -393,32 +377,30 @@ const IrGen = struct {
 
         const rhs = gen.operand_stack.pop();
         const lhs = gen.operand_stack.pop();
-        try gen.write_ins(op, .{
+        try gen.writeIns(op, .{
             .l = lhs,
             .r = rhs,
         });
         try gen.operand_stack.append(gen.allocator, gen.instructions.items.len - 1);
     }
 
-    ///----------------------------------------------------------------------
-    ///  appends an immediate instruction from an integral str to the ins buffer
-    ///  pushes resulting ins index to operand_stack
-    ///
-    fn integral_immediate_ins(gen: *IrGen, ty_ctx: TypeTable.Index, str: []const u8) !void {
+    /// appends an immediate instruction from an integral str to the ins buffer
+    /// pushes resulting ins index to operand_stack
+    fn integralImmediateIns(gen: *IrGen, ty_ctx: TypeTable.Index, str: []const u8) !void {
         const val = std.fmt.parseInt(i129, str, 0) catch unreachable; // invalid int
         switch (gen.typetable.get(ty_ctx).?) {
             .primitive => |p| {
-                if (int_fits_in_primitive(val, p)) switch (p) {
-                    .u8 => try gen.immediate_ins(.u8, @as(u8, @intCast(val))),
-                    .u16 => try gen.immediate_ins(.u16, @as(u16, @intCast(val))),
-                    .u32 => try gen.immediate_ins(.u32, @as(u32, @intCast(val))),
-                    .u64 => try gen.immediate_ins(.u64, @as(u64, @intCast(val))),
-                    .u128 => try gen.immediate_ins(.u128, @as(u128, @intCast(val))),
-                    .i8 => try gen.immediate_ins(.i8, @as(i8, @intCast(val))),
-                    .i16 => try gen.immediate_ins(.i16, @as(i16, @intCast(val))),
-                    .i32 => try gen.immediate_ins(.i32, @as(i32, @intCast(val))),
-                    .i64 => try gen.immediate_ins(.i64, @as(i64, @intCast(val))),
-                    .i128 => try gen.immediate_ins(.i128, @as(i128, @intCast(val))),
+                if (intFitsInPrimitive(val, p)) switch (p) {
+                    .u8 => try gen.immediateIns(.u8, @as(u8, @intCast(val))),
+                    .u16 => try gen.immediateIns(.u16, @as(u16, @intCast(val))),
+                    .u32 => try gen.immediateIns(.u32, @as(u32, @intCast(val))),
+                    .u64 => try gen.immediateIns(.u64, @as(u64, @intCast(val))),
+                    .u128 => try gen.immediateIns(.u128, @as(u128, @intCast(val))),
+                    .i8 => try gen.immediateIns(.i8, @as(i8, @intCast(val))),
+                    .i16 => try gen.immediateIns(.i16, @as(i16, @intCast(val))),
+                    .i32 => try gen.immediateIns(.i32, @as(i32, @intCast(val))),
+                    .i64 => try gen.immediateIns(.i64, @as(i64, @intCast(val))),
+                    .i128 => try gen.immediateIns(.i128, @as(i128, @intCast(val))),
                     .f16,
                     .f32,
                     .f64,
@@ -431,11 +413,9 @@ const IrGen = struct {
         }
     }
 
-    ///----------------------------------------------------------------------
-    ///  appends an immediate instruction from an integral str to the ins buffer
-    ///  pushes resulting ins index to operand_stack
-    ///
-    fn floating_immediate_ins(gen: *IrGen, ty_ctx: TypeTable.Index, str: []const u8) !void {
+    /// appends an immediate instruction from an integral str to the ins buffer
+    /// pushes resulting ins index to operand_stack
+    fn floatingImmediateIns(gen: *IrGen, ty_ctx: TypeTable.Index, str: []const u8) !void {
         const val = std.fmt.parseFloat(f128, str) catch unreachable; // invalid float
         switch (gen.typetable.get(ty_ctx).?) {
             .primitive => |p| {
@@ -452,66 +432,60 @@ const IrGen = struct {
                     .i128,
                     .bool,
                     => unreachable, // ERR: type mismatch
-                    .f16 => try gen.immediate_ins(.f16, @as(f16, @floatCast(val))),
-                    .f32 => try gen.immediate_ins(.f32, @as(f32, @floatCast(val))),
-                    .f64 => try gen.immediate_ins(.f64, @as(f64, @floatCast(val))),
-                    .f128 => try gen.immediate_ins(.f128, @as(f128, @floatCast(val))),
+                    .f16 => try gen.immediateIns(.f16, @as(f16, @floatCast(val))),
+                    .f32 => try gen.immediateIns(.f32, @as(f32, @floatCast(val))),
+                    .f64 => try gen.immediateIns(.f64, @as(f64, @floatCast(val))),
+                    .f128 => try gen.immediateIns(.f128, @as(f128, @floatCast(val))),
                 }
             },
             //else => unreachable, // ERR: type mismatch
         }
     }
 
-    ///----------------------------------------------------------------------
-    ///  caches lexi's string, returns index
-    ///
-    fn cache_lexi(gen: *IrGen, lexi: LexemeIndex) !StringCache.Index {
+    /// caches lexi's string, returns index
+    fn cacheLexi(gen: *IrGen, lexi: LexemeIndex) !StringCache.Index {
         return try gen.stringcache.add(gen.allocator, gen.lex_strs[lexi]);
     }
 
-    ///----------------------------------------------------------------------
-    ///  return primitive type index from lexi, null if lexi
-    ///  doesn't name a primitive
-    ///
-    fn primitive_from_lexi(gen: *IrGen, lexi: LexemeIndex) !?TypeTable.Index {
+    /// return primitive type index from lexi, null if lexi
+    /// doesn't name a primitive
+    fn primitiveFromLexi(gen: *IrGen, lexi: LexemeIndex) !?TypeTable.Index {
         const str = gen.lex_strs[lexi];
         if (std.mem.eql(u8, str, "u8"))
-            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .u8 });
+            return try gen.typetable.addType(gen.allocator, .{ .primitive = .u8 });
         if (std.mem.eql(u8, str, "u16"))
-            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .u16 });
+            return try gen.typetable.addType(gen.allocator, .{ .primitive = .u16 });
         if (std.mem.eql(u8, str, "u32"))
-            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .u32 });
+            return try gen.typetable.addType(gen.allocator, .{ .primitive = .u32 });
         if (std.mem.eql(u8, str, "u64"))
-            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .u64 });
+            return try gen.typetable.addType(gen.allocator, .{ .primitive = .u64 });
         if (std.mem.eql(u8, str, "u128"))
-            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .u128 });
+            return try gen.typetable.addType(gen.allocator, .{ .primitive = .u128 });
         if (std.mem.eql(u8, str, "i8"))
-            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .i8 });
+            return try gen.typetable.addType(gen.allocator, .{ .primitive = .i8 });
         if (std.mem.eql(u8, str, "i16"))
-            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .i16 });
+            return try gen.typetable.addType(gen.allocator, .{ .primitive = .i16 });
         if (std.mem.eql(u8, str, "i32"))
-            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .i32 });
+            return try gen.typetable.addType(gen.allocator, .{ .primitive = .i32 });
         if (std.mem.eql(u8, str, "i64"))
-            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .i64 });
+            return try gen.typetable.addType(gen.allocator, .{ .primitive = .i64 });
         if (std.mem.eql(u8, str, "i128"))
-            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .i128 });
+            return try gen.typetable.addType(gen.allocator, .{ .primitive = .i128 });
         if (std.mem.eql(u8, str, "f16"))
-            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .f16 });
+            return try gen.typetable.addType(gen.allocator, .{ .primitive = .f16 });
         if (std.mem.eql(u8, str, "f32"))
-            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .f32 });
+            return try gen.typetable.addType(gen.allocator, .{ .primitive = .f32 });
         if (std.mem.eql(u8, str, "f64"))
-            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .f64 });
+            return try gen.typetable.addType(gen.allocator, .{ .primitive = .f64 });
         if (std.mem.eql(u8, str, "f128"))
-            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .f128 });
+            return try gen.typetable.addType(gen.allocator, .{ .primitive = .f128 });
         if (std.mem.eql(u8, str, "bool"))
-            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .bool });
+            return try gen.typetable.addType(gen.allocator, .{ .primitive = .bool });
         return null;
     }
 
-    ///----------------------------------------------------------------------
-    ///  determines if a integer is within the range of primitive
-    ///
-    fn int_fits_in_primitive(val: i129, primitive: Type.Primitive) bool {
+    /// determines if an integer is within the range of primitive
+    fn intFitsInPrimitive(val: i129, primitive: Type.Primitive) bool {
         std.debug.assert(switch (primitive) {
             .u8, .u16, .u32, .u64, .u128, .i8, .i16, .i32, .i64, .i128 => true,
             .f16, .f32, .f64, .f128, .bool => false,

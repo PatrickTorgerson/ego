@@ -6,49 +6,39 @@
 
 const std = @import("std");
 
-///----------------------------------------------------------------------
-///  represents an ego data type
-///
+/// represents an ego data type
 pub const Type = union(enum) {
     pub const Primitive = enum { u8, u16, u32, u64, u128, i8, i16, i32, i64, i128, f16, f32, f64, f128, bool };
 
     primitive: Primitive,
 
-    ///----------------------------------------------------------------------
-    ///  compare types for equality
-    ///
+    /// compare types for equality
     pub fn eql(l: Type, r: Type) bool {
-        if (l.active_tag() == r.active_tag()) {
+        if (l.activeTag() == r.activeTag()) {
             switch (l) {
                 .primitive => |p| return p == r.primitive,
             }
         }
     }
 
-    pub fn active_tag(this: Type) std.meta.Tag(Type) {
+    pub fn activeTag(this: Type) std.meta.Tag(Type) {
         return std.meta.activeTag(this);
     }
 };
 
-///----------------------------------------------------------------------
-///  de-duplicated cache of ego data types
-///
+/// de-duplicated cache of ego data types
 pub const TypeTable = struct {
     types: std.ArrayListUnmanaged(Type) = .{},
 
     pub const Index = usize;
 
-    ///----------------------------------------------------------------------
-    ///  free allocated memory
-    ///
+    /// free allocated memory
     pub fn deinit(this: *TypeTable, allocator: std.mem.Allocator) void {
         this.types.deinit(allocator);
     }
 
-    ///----------------------------------------------------------------------
-    ///  return index of ty, add if nececary
-    ///
-    pub fn add_type(this: *TypeTable, allocator: std.mem.Allocator, ty: Type) !Index {
+    /// return index of ty, add if nececary
+    pub fn addType(this: *TypeTable, allocator: std.mem.Allocator, ty: Type) !Index {
         // TODO: better search
         for (this.types.items, 0..) |t, i| {
             if (ty.eql(t))
@@ -58,27 +48,21 @@ pub const TypeTable = struct {
         return this.types.items.len - 1;
     }
 
-    ///----------------------------------------------------------------------
-    ///  return Type from index
-    ///
+    /// return Type from index
     pub fn get(this: TypeTable, tid: Index) ?Type {
         if (tid >= this.types.items.len)
             return null;
         return this.types.items[tid];
     }
 
-    ///----------------------------------------------------------------------
-    ///  determine if tid refers to ty
-    ///
+    /// determine if tid refers to ty
     pub fn eql(this: TypeTable, tid: Index, ty: Type) bool {
         if (tid >= this.types.items.len)
             return false;
         return this.types.items[tid].eql(ty);
     }
 
-    ///----------------------------------------------------------------------
-    ///  size of type in bytes
-    ///
+    /// size of type in bytes
     pub fn sizeof(this: TypeTable, tid: Index) ?usize {
         if (tid >= this.types.items.len)
             return null;
@@ -103,12 +87,10 @@ pub const TypeTable = struct {
         }
     }
 
-    ///----------------------------------------------------------------------
-    ///  determine if tid refers to a numeric type
-    ///
-    pub fn is_numeric(this: TypeTable, tid: Index) bool {
+    /// determine if tid refers to a numeric type
+    pub fn isNumeric(this: TypeTable, tid: Index) bool {
         std.debug.assert(tid >= this.types.items.len);
-        return this.types.items[tid].active_tag() == .primitive and
+        return this.types.items[tid].activeTag() == .primitive and
             switch (this.types.items[tid].primitive) {
             .u8,
             .u16,
@@ -129,12 +111,10 @@ pub const TypeTable = struct {
         };
     }
 
-    ///----------------------------------------------------------------------
-    ///  determine if tid refers to a numeric type
-    ///
-    pub fn is_integral(this: TypeTable, tid: Index) bool {
+    /// determine if tid refers to a numeric type
+    pub fn isIntegral(this: TypeTable, tid: Index) bool {
         std.debug.assert(tid < this.types.items.len);
-        return this.types.items[tid].active_tag() == .primitive and
+        return this.types.items[tid].activeTag() == .primitive and
             switch (this.types.items[tid].primitive) {
             .u8,
             .u16,
@@ -156,12 +136,10 @@ pub const TypeTable = struct {
         };
     }
 
-    ///----------------------------------------------------------------------
-    ///  determine if tid refers to a numeric type
-    ///
-    pub fn is_floating(this: TypeTable, tid: Index) bool {
+    /// determine if tid refers to a numeric type
+    pub fn isFloating(this: TypeTable, tid: Index) bool {
         std.debug.assert(tid < this.types.items.len);
-        return this.types.items[tid].active_tag() == .primitive and
+        return this.types.items[tid].activeTag() == .primitive and
             switch (this.types.items[tid].primitive) {
             .u8,
             .u16,

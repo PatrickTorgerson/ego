@@ -17,9 +17,7 @@ const LexemeIndex = grammar.LexemeIndex;
 const NodeIndex = grammar.NodeIndex;
 const DataIndex = grammar.DataIndex;
 
-///-----------------------------------------------------
-///  iterates over nodes in a ParseTree
-///
+/// iterates over nodes in a ParseTree
 pub const ParseTreeIterator = struct {
     tree: *const ParseTree,
     syms: []const Symbol,
@@ -30,9 +28,6 @@ pub const ParseTreeIterator = struct {
         depth: i32 = 0,
     };
 
-    ///-----------------------------------------------------
-    ///  init ParseTreeIterator
-    ///
     pub fn init(allocator: std.mem.Allocator, tree: *const ParseTree) !ParseTreeIterator {
         var self = ParseTreeIterator{
             .tree = tree,
@@ -43,35 +38,30 @@ pub const ParseTreeIterator = struct {
         return self;
     }
 
-    ///-----------------------------------------------------
-    ///  clean yo mems
-    ///
     pub fn deinit(self: ParseTreeIterator) void {
         self.stack.deinit();
     }
 
-    ///-----------------------------------------------------
-    ///  return next node in tree, or null if nodes exhausted
-    ///  errors if max_depth is reached
-    ///
+    /// return next node in tree, or null if nodes exhausted
+    /// errors if max_depth is reached
     pub fn next(self: *ParseTreeIterator) !?Result {
         if (self.stack.items.len <= 0) return null;
         const top = self.stack.pop();
         switch (self.syms[top.nodi]) {
             .module => {
-                const data = self.tree.as_module(top.nodi);
+                const data = self.tree.asModule(top.nodi);
                 var iter = ReverseIter(NodeIndex).init(data.top_decls);
                 while (iter.next()) |nodi|
                     try self.push(nodi, top.depth + 1);
             },
             .var_decl => {
-                const data = self.tree.as_vardecl(top.nodi);
+                const data = self.tree.asVardecl(top.nodi);
                 var iter = ReverseIter(NodeIndex).init(data.initializers);
                 while (iter.next()) |nodi|
                     try self.push(nodi, top.depth + 1);
             },
             .typed_expr => {
-                const data = self.tree.as_typed_expr(top.nodi);
+                const data = self.tree.asTypedExpr(top.nodi);
                 try self.push(data.expr, top.depth + 1);
             },
             .add,
@@ -92,7 +82,7 @@ pub const ParseTreeIterator = struct {
             .bool_and,
             .bool_or,
             => {
-                const data = self.tree.as_binop(top.nodi);
+                const data = self.tree.asBinop(top.nodi);
                 try self.push(data.rhs, top.depth + 1);
                 try self.push(data.lhs, top.depth + 1);
             },
@@ -114,9 +104,7 @@ pub const ParseTreeIterator = struct {
         return top;
     }
 
-    ///-----------------------------------------------------
-    ///  append to top of stack
-    ///
+    /// append to top of stack
     fn push(self: *ParseTreeIterator, nodi: NodeIndex, depth: i32) !void {
         try self.stack.append(.{
             .nodi = nodi,
@@ -124,29 +112,23 @@ pub const ParseTreeIterator = struct {
         });
     }
 
-    ///-----------------------------------------------------
-    ///  return and remove top of stack
-    ///  return null if stack is empty
-    ///
+    /// return and remove top of stack
+    /// return null if stack is empty
     fn pop(self: *ParseTreeIterator) ?Result {
         if (self.stack.items.len <= 0) return null;
         return self.stack.pop();
     }
 };
 
-///-----------------------------------------------------
-///  writes lexical representation of a ParseTree
-///  to out_writer
-///
+/// writes lexical representation of a ParseTree
+/// to out_writer
 pub const TreeDumpOptions = struct {
     indent_prefix: []const u8 = "",
     omit_comments: bool = false,
 };
 
-///-----------------------------------------------------
-///  writes lexical representation of a ParseTree
-///  to out_writer
-///
+/// writes lexical representation of a ParseTree
+/// to out_writer
 pub fn dump(allocator: std.mem.Allocator, out_writer: anytype, tree: ParseTree, options: TreeDumpOptions) !void {
     var iter = try ParseTreeIterator.init(allocator, &tree);
     defer iter.deinit();
@@ -155,12 +137,12 @@ pub fn dump(allocator: std.mem.Allocator, out_writer: anytype, tree: ParseTree, 
     const strs = tree.lexemes.items(.str);
 
     while (try iter.next()) |node| {
-        try write_indent(out_writer, node.depth, options);
+        try writeIndent(out_writer, node.depth, options);
         try out_writer.writeAll(@tagName(syms[node.nodi]));
         switch (syms[node.nodi]) {
             .module => {}, // no op
             .var_decl => {
-                const data = tree.as_vardecl(node.nodi);
+                const data = tree.asVardecl(node.nodi);
                 try out_writer.writeAll(": ");
                 for (data.identifiers, 0..) |lexi, i| {
                     try out_writer.writeAll(strs[lexi]);
@@ -169,7 +151,7 @@ pub fn dump(allocator: std.mem.Allocator, out_writer: anytype, tree: ParseTree, 
                 }
             },
             .name => {
-                const data = tree.as_name(node.nodi);
+                const data = tree.asName(node.nodi);
                 try out_writer.writeAll(": ");
                 for (data.namespaces) |lexi| {
                     try out_writer.writeAll(strs[lexi]);
@@ -221,10 +203,7 @@ pub fn dump(allocator: std.mem.Allocator, out_writer: anytype, tree: ParseTree, 
     }
 }
 
-///-----------------------------------------------------
-///  writes indentation
-///
-fn write_indent(out_writer: anytype, depth: i32, options: TreeDumpOptions) !void {
+fn writeIndent(out_writer: anytype, depth: i32, options: TreeDumpOptions) !void {
     try out_writer.writeAll(options.indent_prefix);
     if (depth <= 0) return;
     var i: i32 = 1;

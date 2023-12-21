@@ -38,10 +38,8 @@ pub const Vm = struct {
                     const d = instructions.read(u16);
                     const k = instructions.read(u16);
 
-                    vm.stack_at(u64, d).* = vm.kst_at(u64, k).*;
+                    vm.stackAt(u64, d).* = vm.kstAt(u64, k).*;
                 },
-
-                // -- arithmatic
                 .addi => vm.add(.addi, instructions),
                 .addf => vm.add(.addf, instructions),
                 .subi => vm.sub(.subi, instructions),
@@ -50,15 +48,11 @@ pub const Vm = struct {
                 .mulf => vm.mul(.mulf, instructions),
                 // .divi => divi(.divi, instructions), TODO: #2 this
                 .divf => vm.divf(.divf, instructions),
-
-                // --
-
                 .mov64 => {
                     const d = instructions.read(u16);
                     const s = instructions.read(u16);
-                    vm.stack_at(u64, d).* = vm.stack_at(u64, s).*;
+                    vm.stackAt(u64, d).* = vm.stackAt(u64, s).*;
                 },
-
                 .call => {
                     const f = instructions.read(usize);
                     const b = instructions.read(u16);
@@ -68,25 +62,23 @@ pub const Vm = struct {
                     });
                     instructions.buffer = @as([*]const u8, @ptrFromInt(f));
                 },
-
                 .ret => {
                     instructions.buffer = frames.items[frames.items.len - 1].ret_addr;
                     _ = frames.pop();
                 },
-
                 else => unreachable,
             }
         }
     }
 
     // TODO: index into current stack frame
-    fn stack_at(vm: *Vm, comptime T: type, index: u16) *T {
+    fn stackAt(vm: *Vm, comptime T: type, index: u16) *T {
         const s = @sizeOf(T);
         var at = vm.stack[index * s ..];
         return std.mem.bytesAsValue(T, at[0..s]);
     }
 
-    fn kst_at(vm: *Vm, comptime T: type, index: u16) *const T {
+    fn kstAt(vm: *Vm, comptime T: type, index: u16) *const T {
         const s = @sizeOf(T);
         var at = vm.kst[index * s ..];
         return std.mem.bytesAsValue(T, at[0..s]);
@@ -101,41 +93,36 @@ pub const Vm = struct {
         return @as(*const T, @ptrCast(@alignCast(p)));
     }
 
-    ///
     fn add(vm: *Vm, comptime op: Opcode, instructions: *InstructionBuffer) void {
         const T = ArithTy(op);
-        vm.stack_at(T, instructions.read(u16)).* =
-            vm.stack_at(T, instructions.read(u16)).* +
-            vm.stack_at(T, instructions.read(u16)).*;
+        vm.stackAt(T, instructions.read(u16)).* =
+            vm.stackAt(T, instructions.read(u16)).* +
+            vm.stackAt(T, instructions.read(u16)).*;
     }
 
-    ///
     fn sub(vm: *Vm, comptime op: Opcode, instructions: *InstructionBuffer) void {
         const T = ArithTy(op);
-        vm.stack_at(T, instructions.read(u16)).* =
-            vm.stack_at(T, instructions.read(u16)).* -
-            vm.stack_at(T, instructions.read(u16)).*;
+        vm.stackAt(T, instructions.read(u16)).* =
+            vm.stackAt(T, instructions.read(u16)).* -
+            vm.stackAt(T, instructions.read(u16)).*;
     }
 
-    ///
     fn mul(vm: *Vm, comptime op: Opcode, instructions: *InstructionBuffer) void {
         const T = ArithTy(op);
-        vm.stack_at(T, instructions.read(u16)).* =
-            vm.stack_at(T, instructions.read(u16)).* *
-            vm.stack_at(T, instructions.read(u16)).*;
+        vm.stackAt(T, instructions.read(u16)).* =
+            vm.stackAt(T, instructions.read(u16)).* *
+            vm.stackAt(T, instructions.read(u16)).*;
     }
 
-    ///
     fn divf(vm: *Vm, comptime op: Opcode, instructions: *InstructionBuffer) void {
         const T = ArithTy(op);
-        if (comptime is_floating(T)) {
-            vm.stack_at(T, instructions.read(u16)).* =
-                vm.stack_at(T, instructions.read(u16)).* /
-                vm.stack_at(T, instructions.read(u16)).*;
+        if (comptime isFloating(T)) {
+            vm.stackAt(T, instructions.read(u16)).* =
+                vm.stackAt(T, instructions.read(u16)).* /
+                vm.stackAt(T, instructions.read(u16)).*;
         } else unreachable;
     }
 
-    // ********************************************************************************
     /// returns arithmatic type of arithmatic opcodes
     fn ArithTy(comptime op: Opcode) type {
         return switch (op) {
@@ -145,8 +132,7 @@ pub const Vm = struct {
         };
     }
 
-    // ********************************************************************************
-    fn is_floating(comptime T: type) bool {
+    fn isFloating(comptime T: type) bool {
         return switch (@typeInfo(T)) {
             .Float => true,
             .Int => false,

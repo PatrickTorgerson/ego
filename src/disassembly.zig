@@ -10,17 +10,15 @@ const Opcode = @import("instruction.zig").Opcode;
 const Type = @import("type.zig").Type;
 const TypeTable = @import("type.zig").TypeTable;
 
-///
 pub fn disassemble(writer: anytype, code: CodePage, tytable: TypeTable) !void {
     var offset: usize = 0;
     while (offset < code.buffer.len) {
-        offset += try disassemble_ins(writer, code, offset, tytable);
+        offset += try disassembleIns(writer, code, offset, tytable);
         try writer.writeByte('\n');
     }
 }
 
-///
-pub fn disassemble_ins(writer: anytype, code: CodePage, offset: usize, tytable: TypeTable) !usize {
+pub fn disassembleIns(writer: anytype, code: CodePage, offset: usize, tytable: TypeTable) !usize {
     var size: usize = 0;
     var ins = code.buffer[offset..];
     while (ins[0] == 0) {

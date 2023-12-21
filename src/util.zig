@@ -7,9 +7,7 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
-///----------------------------------------------------------------------
 ///  iterates over slice in reverse order
-///
 pub fn ReverseIter(comptime T: type) type {
     return struct {
         const This = @This();
@@ -35,9 +33,7 @@ pub fn ReverseIter(comptime T: type) type {
     };
 }
 
-///----------------------------------------------------------------------
 ///  type erased witer
-///
 pub const GenericWriter = struct {
     /// pointer to underlying writer
     ptr: *const anyopaque,
