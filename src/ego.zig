@@ -1,6 +1,6 @@
 // ********************************************************************************
 //! https://github.com/PatrickTorgerson/ego
-//! Copyright (c) 2022 Patrick Torgerson
+//! Copyright (c) 2024 Patrick Torgerson
 //! ego uses the MIT license, see LICENSE for more information
 // ********************************************************************************
 
@@ -11,6 +11,6 @@ pub const irgen = @import("irgen.zig");
 pub const debugtrace = @import("debugtrace.zig");
 pub const util = @import("util.zig");
 
-test "ego" {
+test {
     std.testing.refAllDecls(@This());
 }

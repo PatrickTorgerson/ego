@@ -1,6 +1,6 @@
 // ********************************************************************************
 //! https://github.com/PatrickTorgerson/ego
-//! Copyright (c) 2022 Patrick Torgerson
+//! Copyright (c) 2024 Patrick Torgerson
 //! ego uses the MIT license, see LICENSE for more information
 // ********************************************************************************
 
@@ -36,7 +36,7 @@ pub const BufferStack = struct {
         try this.pad(@sizeOf(T));
         const byte_offset = this.buff.items.len;
         try this.buff.appendSlice(std.mem.asBytes(&val));
-        return @intCast(u16, byte_offset / @sizeOf(T));
+        return @as(u16, @intCast(byte_offset / @sizeOf(T)));
     }
 
     ///

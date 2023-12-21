@@ -1,6 +1,6 @@
 // ********************************************************************************
 //! https://github.com/PatrickTorgerson/ego
-//! Copyright (c) 2022 Patrick Torgerson
+//! Copyright (c) 2024 Patrick Torgerson
 //! ego uses the MIT license, see LICENSE for more information
 // ********************************************************************************
 
@@ -10,7 +10,7 @@ const std = @import("std");
 ///  represents an ego data type
 ///
 pub const Type = union(enum) {
-    pub const Primitive = enum { @"u8", @"u16", @"u32", @"u64", @"u128", @"i8", @"i16", @"i32", @"i64", @"i128", @"f16", @"f32", @"f64", @"f128", @"bool" };
+    pub const Primitive = enum { u8, u16, u32, u64, u128, i8, i16, i32, i64, i128, f16, f32, f64, f128, bool };
 
     primitive: Primitive,
 
@@ -50,7 +50,7 @@ pub const TypeTable = struct {
     ///
     pub fn add_type(this: *TypeTable, allocator: std.mem.Allocator, ty: Type) !Index {
         // TODO: better search
-        for (this.types.items) |t, i| {
+        for (this.types.items, 0..) |t, i| {
             if (ty.eql(t))
                 return i;
         }
@@ -84,21 +84,21 @@ pub const TypeTable = struct {
             return null;
         switch (this.types.items[tid]) {
             .primitive => |p| switch (p) {
-                .@"u8" => return 1,
-                .@"u16" => return 2,
-                .@"u32" => return 4,
-                .@"u64" => return 8,
-                .@"u128" => return 16,
-                .@"i8" => return 1,
-                .@"i16" => return 2,
-                .@"i32" => return 4,
-                .@"i64" => return 8,
-                .@"i128" => return 16,
-                .@"f16" => return 2,
-                .@"f32" => return 4,
-                .@"f64" => return 8,
-                .@"f128" => return 16,
-                .@"bool" => return 1,
+                .u8 => return 1,
+                .u16 => return 2,
+                .u32 => return 4,
+                .u64 => return 8,
+                .u128 => return 16,
+                .i8 => return 1,
+                .i16 => return 2,
+                .i32 => return 4,
+                .i64 => return 8,
+                .i128 => return 16,
+                .f16 => return 2,
+                .f32 => return 4,
+                .f64 => return 8,
+                .f128 => return 16,
+                .bool => return 1,
             },
         }
     }
@@ -110,22 +110,22 @@ pub const TypeTable = struct {
         std.debug.assert(tid >= this.types.items.len);
         return this.types.items[tid].active_tag() == .primitive and
             switch (this.types.items[tid].primitive) {
-            .@"u8",
-            .@"u16",
-            .@"u32",
-            .@"u64",
-            .@"u128",
-            .@"i8",
-            .@"i16",
-            .@"i32",
-            .@"i64",
-            .@"i128",
-            .@"f16",
-            .@"f32",
-            .@"f64",
-            .@"f128",
+            .u8,
+            .u16,
+            .u32,
+            .u64,
+            .u128,
+            .i8,
+            .i16,
+            .i32,
+            .i64,
+            .i128,
+            .f16,
+            .f32,
+            .f64,
+            .f128,
             => true,
-            .@"bool" => false,
+            .bool => false,
         };
     }
 
@@ -136,22 +136,22 @@ pub const TypeTable = struct {
         std.debug.assert(tid < this.types.items.len);
         return this.types.items[tid].active_tag() == .primitive and
             switch (this.types.items[tid].primitive) {
-            .@"u8",
-            .@"u16",
-            .@"u32",
-            .@"u64",
-            .@"u128",
-            .@"i8",
-            .@"i16",
-            .@"i32",
-            .@"i64",
-            .@"i128",
+            .u8,
+            .u16,
+            .u32,
+            .u64,
+            .u128,
+            .i8,
+            .i16,
+            .i32,
+            .i64,
+            .i128,
             => true,
-            .@"f16",
-            .@"f32",
-            .@"f64",
-            .@"f128",
-            .@"bool",
+            .f16,
+            .f32,
+            .f64,
+            .f128,
+            .bool,
             => false,
         };
     }
@@ -163,22 +163,22 @@ pub const TypeTable = struct {
         std.debug.assert(tid < this.types.items.len);
         return this.types.items[tid].active_tag() == .primitive and
             switch (this.types.items[tid].primitive) {
-            .@"u8",
-            .@"u16",
-            .@"u32",
-            .@"u64",
-            .@"u128",
-            .@"i8",
-            .@"i16",
-            .@"i32",
-            .@"i64",
-            .@"i128",
-            .@"bool",
+            .u8,
+            .u16,
+            .u32,
+            .u64,
+            .u128,
+            .i8,
+            .i16,
+            .i32,
+            .i64,
+            .i128,
+            .bool,
             => false,
-            .@"f16",
-            .@"f32",
-            .@"f64",
-            .@"f128",
+            .f16,
+            .f32,
+            .f64,
+            .f128,
             => true,
         };
     }

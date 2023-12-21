@@ -1,6 +1,6 @@
 // ********************************************************************************
 //! https://github.com/PatrickTorgerson/ego
-//! Copyright (c) 2022 Patrick Torgerson
+//! Copyright (c) 2024 Patrick Torgerson
 //! ego uses the MIT license, see LICENSE for more information
 // ********************************************************************************
 
@@ -66,7 +66,7 @@ pub const Vm = struct {
                         .base = frames.items[frames.items.len - 1].base + b,
                         .ret_addr = instructions.buffer + 1,
                     });
-                    instructions.buffer = @intToPtr([*]const u8, f);
+                    instructions.buffer = @as([*]const u8, @ptrFromInt(f));
                 },
 
                 .ret => {
@@ -83,22 +83,22 @@ pub const Vm = struct {
     fn stack_at(vm: *Vm, comptime T: type, index: u16) *T {
         const s = @sizeOf(T);
         var at = vm.stack[index * s ..];
-        return std.mem.bytesAsValue(T, @alignCast(s, at[0..s]));
+        return std.mem.bytesAsValue(T, at[0..s]);
     }
 
     fn kst_at(vm: *Vm, comptime T: type, index: u16) *const T {
         const s = @sizeOf(T);
         var at = vm.kst[index * s ..];
-        return std.mem.bytesAsValue(T, @alignCast(s, at[0..s]));
+        return std.mem.bytesAsValue(T, at[0..s]);
     }
 
     /// ptr cast helper
     fn ptr(comptime T: type, p: *u8) *T {
-        return @ptrCast(*T, @alignCast(@alignOf(T), p));
+        return @as(*T, @ptrCast(@alignCast(p)));
     }
     /// ptr cast helper
     fn const_ptr(comptime T: type, p: *const u8) *const T {
-        return @ptrCast(*const T, @alignCast(@alignOf(T), p));
+        return @as(*const T, @ptrCast(@alignCast(p)));
     }
 
     ///

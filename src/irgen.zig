@@ -1,6 +1,6 @@
 // ********************************************************************************
 //! https://github.com/PatrickTorgerson/ego
-//! Copyright (c) 2022 Patrick Torgerson
+//! Copyright (c) 2024 Patrick Torgerson
 //! ego uses the MIT license, see LICENSE for more information
 // ********************************************************************************
 
@@ -50,7 +50,7 @@ pub fn gen_ir(allocator: std.mem.Allocator, tree: ParseTree) !Ir {
     defer gen.state_stack.deinit(allocator);
     defer gen.instructions.deinit(allocator);
     defer gen.decls.deinit(allocator);
-    defer gen.stringcache.deinit(allocator);
+    errdefer gen.stringcache.deinit(allocator);
     defer gen.uninitialized.deinit(allocator);
     defer gen.operand_stack.deinit(allocator);
     defer gen.typetable.deinit(allocator);
@@ -130,10 +130,10 @@ pub fn gen_ir(allocator: std.mem.Allocator, tree: ParseTree) !Ir {
     debugtrace.print("\n", .{});
 
     return Ir{
-        .stringcache = gen.stringcache.to_owned_cahce(allocator),
-        .instructions = gen.instructions.toOwnedSlice(allocator),
-        .decls = gen.decls.toOwnedSlice(allocator),
-        .namespaces = gen.namespaces.toOwnedSlice(allocator),
+        .stringcache = gen.stringcache,
+        .instructions = try gen.instructions.toOwnedSlice(allocator),
+        .decls = try gen.decls.toOwnedSlice(allocator),
+        .namespaces = try gen.namespaces.toOwnedSlice(allocator),
     };
 }
 
@@ -242,6 +242,8 @@ const IrGen = struct {
                     if (gen.typetable.is_floating(ty_ctx)) {
                         const lexi = gen.tree.nodes.items(.lexi)[nodi];
                         try gen.floating_immediate_ins(ty_ctx, gen.lex_strs[lexi]);
+                    } else if (gen.typetable.is_integral(ty_ctx)) {
+                        // TODO: gen integral ins from whole number floating literals
                     } else unreachable; // ERR: type mismatch
                 } else unreachable; // ERR: cannot infer type
             },
@@ -327,21 +329,21 @@ const IrGen = struct {
     ///
     fn write_ins(gen: *IrGen, comptime op: Ir.Op, data: Ir.OpData(op)) !void {
         const payload: Ir.Data = switch (op) {
-            .@"u8" => .{ .@"u8" = data },
-            .@"u16" => .{ .@"u16" = data },
-            .@"u32" => .{ .@"u32" = data },
-            .@"u64" => .{ .@"u64" = data },
-            .@"u128" => .{ .@"u128" = data },
-            .@"i8" => .{ .@"i8" = data },
-            .@"i16" => .{ .@"i16" = data },
-            .@"i32" => .{ .@"i32" = data },
-            .@"i64" => .{ .@"i64" = data },
-            .@"i128" => .{ .@"i128" = data },
-            .@"f16" => .{ .@"f16" = data },
-            .@"f32" => .{ .@"f32" = data },
-            .@"f64" => .{ .@"f64" = data },
-            .@"f128" => .{ .@"f128" = data },
-            .@"bool" => .{ .@"bool" = data },
+            .u8 => .{ .u8 = data },
+            .u16 => .{ .u16 = data },
+            .u32 => .{ .u32 = data },
+            .u64 => .{ .u64 = data },
+            .u128 => .{ .u128 = data },
+            .i8 => .{ .i8 = data },
+            .i16 => .{ .i16 = data },
+            .i32 => .{ .i32 = data },
+            .i64 => .{ .i64 = data },
+            .i128 => .{ .i128 = data },
+            .f16 => .{ .f16 = data },
+            .f32 => .{ .f32 = data },
+            .f64 => .{ .f64 = data },
+            .f128 => .{ .f128 = data },
+            .bool => .{ .bool = data },
             .global => .{ .decl = data },
 
             .set, .get, .add, .sub, .mul, .div => .{ .bin = data },
@@ -356,21 +358,21 @@ const IrGen = struct {
     ///
     fn immediate_ins(gen: *IrGen, comptime op: Ir.Op, value: Ir.OpData(op)) !void {
         std.debug.assert(switch (op) {
-            .@"u8",
-            .@"u16",
-            .@"u32",
-            .@"u64",
-            .@"u128",
-            .@"i8",
-            .@"i16",
-            .@"i32",
-            .@"i64",
-            .@"i128",
-            .@"f16",
-            .@"f32",
-            .@"f64",
-            .@"f128",
-            .@"bool",
+            .u8,
+            .u16,
+            .u32,
+            .u64,
+            .u128,
+            .i8,
+            .i16,
+            .i32,
+            .i64,
+            .i128,
+            .f16,
+            .f32,
+            .f64,
+            .f128,
+            .bool,
             => true,
             else => false,
         });
@@ -407,21 +409,21 @@ const IrGen = struct {
         switch (gen.typetable.get(ty_ctx).?) {
             .primitive => |p| {
                 if (int_fits_in_primitive(val, p)) switch (p) {
-                    .@"u8" => try gen.immediate_ins(.@"u8", @intCast(u8, val)),
-                    .@"u16" => try gen.immediate_ins(.@"u16", @intCast(u16, val)),
-                    .@"u32" => try gen.immediate_ins(.@"u32", @intCast(u32, val)),
-                    .@"u64" => try gen.immediate_ins(.@"u64", @intCast(u64, val)),
-                    .@"u128" => try gen.immediate_ins(.@"u128", @intCast(u128, val)),
-                    .@"i8" => try gen.immediate_ins(.@"i8", @intCast(i8, val)),
-                    .@"i16" => try gen.immediate_ins(.@"i16", @intCast(i16, val)),
-                    .@"i32" => try gen.immediate_ins(.@"i32", @intCast(i32, val)),
-                    .@"i64" => try gen.immediate_ins(.@"i64", @intCast(i64, val)),
-                    .@"i128" => try gen.immediate_ins(.@"i128", @intCast(i128, val)),
-                    .@"f16",
-                    .@"f32",
-                    .@"f64",
-                    .@"f128",
-                    .@"bool",
+                    .u8 => try gen.immediate_ins(.u8, @as(u8, @intCast(val))),
+                    .u16 => try gen.immediate_ins(.u16, @as(u16, @intCast(val))),
+                    .u32 => try gen.immediate_ins(.u32, @as(u32, @intCast(val))),
+                    .u64 => try gen.immediate_ins(.u64, @as(u64, @intCast(val))),
+                    .u128 => try gen.immediate_ins(.u128, @as(u128, @intCast(val))),
+                    .i8 => try gen.immediate_ins(.i8, @as(i8, @intCast(val))),
+                    .i16 => try gen.immediate_ins(.i16, @as(i16, @intCast(val))),
+                    .i32 => try gen.immediate_ins(.i32, @as(i32, @intCast(val))),
+                    .i64 => try gen.immediate_ins(.i64, @as(i64, @intCast(val))),
+                    .i128 => try gen.immediate_ins(.i128, @as(i128, @intCast(val))),
+                    .f16,
+                    .f32,
+                    .f64,
+                    .f128,
+                    .bool,
                     => unreachable, // ERR: type mismatch
                 } else unreachable; // ERR: literal too large
             },
@@ -438,22 +440,22 @@ const IrGen = struct {
         switch (gen.typetable.get(ty_ctx).?) {
             .primitive => |p| {
                 switch (p) {
-                    .@"u8",
-                    .@"u16",
-                    .@"u32",
-                    .@"u64",
-                    .@"u128",
-                    .@"i8",
-                    .@"i16",
-                    .@"i32",
-                    .@"i64",
-                    .@"i128",
-                    .@"bool",
+                    .u8,
+                    .u16,
+                    .u32,
+                    .u64,
+                    .u128,
+                    .i8,
+                    .i16,
+                    .i32,
+                    .i64,
+                    .i128,
+                    .bool,
                     => unreachable, // ERR: type mismatch
-                    .@"f16" => try gen.immediate_ins(.@"f16", @floatCast(f16, val)),
-                    .@"f32" => try gen.immediate_ins(.@"f32", @floatCast(f32, val)),
-                    .@"f64" => try gen.immediate_ins(.@"f64", @floatCast(f64, val)),
-                    .@"f128" => try gen.immediate_ins(.@"f128", @floatCast(f128, val)),
+                    .f16 => try gen.immediate_ins(.f16, @as(f16, @floatCast(val))),
+                    .f32 => try gen.immediate_ins(.f32, @as(f32, @floatCast(val))),
+                    .f64 => try gen.immediate_ins(.f64, @as(f64, @floatCast(val))),
+                    .f128 => try gen.immediate_ins(.f128, @as(f128, @floatCast(val))),
                 }
             },
             //else => unreachable, // ERR: type mismatch
@@ -474,35 +476,35 @@ const IrGen = struct {
     fn primitive_from_lexi(gen: *IrGen, lexi: LexemeIndex) !?TypeTable.Index {
         const str = gen.lex_strs[lexi];
         if (std.mem.eql(u8, str, "u8"))
-            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .@"u8" });
+            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .u8 });
         if (std.mem.eql(u8, str, "u16"))
-            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .@"u16" });
+            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .u16 });
         if (std.mem.eql(u8, str, "u32"))
-            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .@"u32" });
+            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .u32 });
         if (std.mem.eql(u8, str, "u64"))
-            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .@"u64" });
+            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .u64 });
         if (std.mem.eql(u8, str, "u128"))
-            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .@"u128" });
+            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .u128 });
         if (std.mem.eql(u8, str, "i8"))
-            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .@"i8" });
+            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .i8 });
         if (std.mem.eql(u8, str, "i16"))
-            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .@"i16" });
+            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .i16 });
         if (std.mem.eql(u8, str, "i32"))
-            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .@"i32" });
+            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .i32 });
         if (std.mem.eql(u8, str, "i64"))
-            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .@"i64" });
+            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .i64 });
         if (std.mem.eql(u8, str, "i128"))
-            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .@"i128" });
+            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .i128 });
         if (std.mem.eql(u8, str, "f16"))
-            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .@"f16" });
+            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .f16 });
         if (std.mem.eql(u8, str, "f32"))
-            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .@"f32" });
+            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .f32 });
         if (std.mem.eql(u8, str, "f64"))
-            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .@"f64" });
+            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .f64 });
         if (std.mem.eql(u8, str, "f128"))
-            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .@"f128" });
+            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .f128 });
         if (std.mem.eql(u8, str, "bool"))
-            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .@"bool" });
+            return try gen.typetable.add_type(gen.allocator, .{ .primitive = .bool });
         return null;
     }
 
@@ -511,21 +513,21 @@ const IrGen = struct {
     ///
     fn int_fits_in_primitive(val: i129, primitive: Type.Primitive) bool {
         std.debug.assert(switch (primitive) {
-            .@"u8", .@"u16", .@"u32", .@"u64", .@"u128", .@"i8", .@"i16", .@"i32", .@"i64", .@"i128" => true,
-            .@"f16", .@"f32", .@"f64", .@"f128", .@"bool" => false,
+            .u8, .u16, .u32, .u64, .u128, .i8, .i16, .i32, .i64, .i128 => true,
+            .f16, .f32, .f64, .f128, .bool => false,
         });
         return switch (primitive) {
-            .@"u8" => val >= std.math.minInt(u8) and val <= std.math.maxInt(u8),
-            .@"u16" => val >= std.math.minInt(u16) and val <= std.math.maxInt(u16),
-            .@"u32" => val >= std.math.minInt(u32) and val <= std.math.maxInt(u32),
-            .@"u64" => val >= std.math.minInt(u64) and val <= std.math.maxInt(u64),
-            .@"u128" => val >= std.math.minInt(u128) and val <= std.math.maxInt(u128),
-            .@"i8" => val >= std.math.minInt(i8) and val <= std.math.maxInt(i8),
-            .@"i16" => val >= std.math.minInt(i16) and val <= std.math.maxInt(i16),
-            .@"i32" => val >= std.math.minInt(i32) and val <= std.math.maxInt(i32),
-            .@"i64" => val >= std.math.minInt(i64) and val <= std.math.maxInt(i64),
-            .@"i128" => val >= std.math.minInt(i128) and val <= std.math.maxInt(i128),
-            .@"f16", .@"f32", .@"f64", .@"f128", .@"bool" => unreachable,
+            .u8 => val >= std.math.minInt(u8) and val <= std.math.maxInt(u8),
+            .u16 => val >= std.math.minInt(u16) and val <= std.math.maxInt(u16),
+            .u32 => val >= std.math.minInt(u32) and val <= std.math.maxInt(u32),
+            .u64 => val >= std.math.minInt(u64) and val <= std.math.maxInt(u64),
+            .u128 => val >= std.math.minInt(u128) and val <= std.math.maxInt(u128),
+            .i8 => val >= std.math.minInt(i8) and val <= std.math.maxInt(i8),
+            .i16 => val >= std.math.minInt(i16) and val <= std.math.maxInt(i16),
+            .i32 => val >= std.math.minInt(i32) and val <= std.math.maxInt(i32),
+            .i64 => val >= std.math.minInt(i64) and val <= std.math.maxInt(i64),
+            .i128 => val >= std.math.minInt(i128) and val <= std.math.maxInt(i128),
+            .f16, .f32, .f64, .f128, .bool => unreachable,
         };
     }
 };

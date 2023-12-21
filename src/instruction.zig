@@ -1,6 +1,6 @@
 // ********************************************************************************
 //! https://github.com/PatrickTorgerson/ego
-//! Copyright (c) 2022 Patrick Torgerson
+//! Copyright (c) 2024 Patrick Torgerson
 //! ego uses the MIT license, see LICENSE for more information
 // ********************************************************************************
 
@@ -48,7 +48,7 @@ pub const InstructionBuffer = struct {
             this.buffer += 1;
         const op = this.buffer[0];
         this.buffer += 1;
-        return @intToEnum(Opcode, op);
+        return @as(Opcode, @enumFromInt(op));
     }
 
     pub fn read(this: *InstructionBuffer, comptime T: type) T {

@@ -1,6 +1,6 @@
 // ********************************************************************************
 //! https://github.com/PatrickTorgerson/ego
-//! Copyright (c) 2022 Patrick Torgerson
+//! Copyright (c) 2024 Patrick Torgerson
 //! ego uses the MIT license, see LICENSE for more information
 // ********************************************************************************
 
@@ -48,29 +48,29 @@ pub const Symbol = enum(i32) {
     bool_or,
 
     pub fn init_literal(t: Terminal) ?Symbol {
-        const diff = @enumToInt(Symbol.literal_int) - @enumToInt(Terminal.literal_int);
-        const i = @enumToInt(t);
-        if (i >= @enumToInt(Terminal.literal_int) and i <= @enumToInt(Terminal.literal_string)) {
-            return @intToEnum(Symbol, i + diff);
+        const diff = @intFromEnum(Symbol.literal_int) - @intFromEnum(Terminal.literal_int);
+        const i = @intFromEnum(t);
+        if (i >= @intFromEnum(Terminal.literal_int) and i <= @intFromEnum(Terminal.literal_string)) {
+            return @as(Symbol, @enumFromInt(i + diff));
         } else return null;
     }
 
     pub fn init_binop(t: Terminal) ?Symbol {
-        const diff = @enumToInt(Symbol.add) - @enumToInt(Terminal.plus);
-        const i = @enumToInt(t);
-        if (i >= @enumToInt(Terminal.plus) and i <= @enumToInt(Terminal.ky_or)) {
-            return @intToEnum(Symbol, i + diff);
+        const diff = @intFromEnum(Symbol.add) - @intFromEnum(Terminal.plus);
+        const i = @intFromEnum(t);
+        if (i >= @intFromEnum(Terminal.plus) and i <= @intFromEnum(Terminal.ky_or)) {
+            return @as(Symbol, @enumFromInt(i + diff));
         } else return null;
     }
 
     pub fn is_binop(sym: Symbol) bool {
-        const i = @enumToInt(sym);
-        return i >= @enumToInt(Symbol.add) and i <= @enumToInt(Symbol.bool_or);
+        const i = @intFromEnum(sym);
+        return i >= @intFromEnum(Symbol.add) and i <= @intFromEnum(Symbol.bool_or);
     }
 
     pub fn is_literal(sym: Symbol) bool {
-        const i = @enumToInt(sym);
-        return i >= @enumToInt(Symbol.literal_int) and i <= @enumToInt(Symbol.literal_string);
+        const i = @intFromEnum(sym);
+        return i >= @intFromEnum(Symbol.literal_int) and i <= @intFromEnum(Symbol.literal_string);
     }
 };
 

@@ -1,8 +1,8 @@
-//********************************************************************************
-//  https://github.com/PatrickTorgerson/ego
-//  Copyright (c) 2022 Patrick Torgerson
-//  ego uses the MIT license, see LICENSE for more information
-//********************************************************************************
+// ********************************************************************************
+//! https://github.com/PatrickTorgerson/ego
+//! Copyright (c) 2024 Patrick Torgerson
+//! ego uses the MIT license, see LICENSE for more information
+// ********************************************************************************
 
 const std = @import("std");
 
@@ -28,20 +28,6 @@ pub fn deinit(this: *StringCache, allocator: std.mem.Allocator) void {
 }
 
 ///----------------------------------------------------------------------
-///  returns a new StringCache that takes over onewship of
-///  allocated memory
-///
-pub fn to_owned_cahce(this: *StringCache, allocator: std.mem.Allocator) StringCache {
-    var cache = StringCache{};
-    cache.buffer.capacity = this.buffer.capacity;
-    cache.buffer.items = this.buffer.toOwnedSlice(allocator);
-    cache.slices.capacity = this.slices.capacity;
-    cache.slices.items = this.slices.toOwnedSlice(allocator);
-    this.* = .{};
-    return cache;
-}
-
-///----------------------------------------------------------------------
 ///  get string from index
 ///
 pub fn get(this: StringCache, index: Index) []const u8 {
@@ -56,7 +42,7 @@ pub fn get(this: StringCache, index: Index) []const u8 {
 pub fn add(this: *StringCache, allocator: std.mem.Allocator, str: []const u8) !Index {
     // search
     // TODO: hash map lookup
-    for (this.slices.items) |slice, i| {
+    for (this.slices.items, 0..) |slice, i| {
         if (std.mem.eql(u8, str, this.buffer.items[slice.start..slice.end]))
             return i;
     }

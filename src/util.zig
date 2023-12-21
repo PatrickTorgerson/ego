@@ -1,6 +1,6 @@
 // ********************************************************************************
 //! https://github.com/PatrickTorgerson/ego
-//! Copyright (c) 2022 Patrick Torgerson
+//! Copyright (c) 2024 Patrick Torgerson
 //! ego uses the MIT license, see LICENSE for more information
 // ********************************************************************************
 
@@ -39,122 +39,110 @@ pub fn ReverseIter(comptime T: type) type {
 ///  type erased witer
 ///
 pub const GenericWriter = struct {
+    /// pointer to underlying writer
     ptr: *const anyopaque,
-    vtable: *const VTable,
+    /// pointer to write function
+    writefn: *const fn (ptr: *const anyopaque, bytes: []const u8) anyerror!usize,
 
-    pub const Error = anyerror;
-    pub const VTable = struct {
-        write: *const fn (ptr: *const anyopaque, bytes: []const u8) Error!usize,
-        writeAll: *const fn (ptr: *const anyopaque, bytes: []const u8) Error!void,
-        writeByte: *const fn (ptr: *const anyopaque, byte: u8) Error!void,
-        writeByteNTimes: *const fn (ptr: *const anyopaque, byte: u8, n: usize) Error!void,
-    };
-
-    ///----------------------------------------------------------------------
-    ///  init from pointer to writer
-    ///
-    pub fn init(pointer: anytype) GenericWriter {
+    /// create writer from pointer to writer and write fn
+    /// expected signiture of writefn `fn(self: @TypeOf(pointer), bytes: []const u8) !usize`
+    /// where number of bytes written is returned
+    pub fn initWithWriteFn(pointer: anytype, writefn: anytype) GenericWriter {
         comptime var ptr_info = @typeInfo(@TypeOf(pointer));
-
         comptime assert(ptr_info == .Pointer); // Must be a pointer
         comptime assert(ptr_info.Pointer.size == .One); // Must be a single-item pointer
-
+        comptime assert(@typeInfo(@TypeOf(writefn)) == .Fn); // writefn must be function
         ptr_info.Pointer.is_const = true;
         const Ptr = @Type(ptr_info);
+        const proxy = struct {
+            fn write_proxy(ptr: *const anyopaque, bytes: []const u8) !usize {
+                const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
+                return @call(.always_inline, writefn, .{ self.*, bytes });
+            }
+        };
+        return .{
+            .ptr = pointer,
+            .writefn = proxy.write_proxy,
+        };
+    }
 
-        const alignment = ptr_info.Pointer.alignment;
-
+    /// create writer from pointer to writer, looks for fiels `write()` as writefn
+    /// expected signiture of writefn `fn(self: @TypeOf(pointer), bytes: []const u8) !usize`
+    /// where number of bytes written is returned
+    pub fn init(pointer: anytype) GenericWriter {
+        const ptr_info = @typeInfo(@TypeOf(pointer));
+        comptime assert(ptr_info == .Pointer); // Must be a pointer
+        comptime assert(ptr_info.Pointer.size == .One); // Must be a single-item pointer
         const Child = ptr_info.Pointer.child;
         const child_info = @typeInfo(ptr_info.Pointer.child);
         assert(child_info == .Struct);
-
-        const gen = struct {
-            fn write_impl(ptr: *const anyopaque, bytes: []const u8) !usize {
-                const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
-                return @call(.{ .modifier = .always_inline }, @field(Child, "write"), .{ self.*, bytes });
-            }
-            fn writeAll_impl(ptr: *const anyopaque, bytes: []const u8) !void {
-                const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
-                return @call(.{ .modifier = .always_inline }, @field(Child, "writeAll"), .{ self.*, bytes });
-            }
-            fn writeByte_impl(ptr: *const anyopaque, byte: u8) !void {
-                const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
-                return @call(.{ .modifier = .always_inline }, @field(Child, "writeByte"), .{ self.*, byte });
-            }
-            fn writeByteNTimes_impl(ptr: *const anyopaque, byte: u8, n: usize) !void {
-                const self = @ptrCast(Ptr, @alignCast(alignment, ptr));
-                return @call(.{ .modifier = .always_inline }, @field(Child, "writeByteNTimes"), .{ self.*, byte, n });
-            }
-
-            const vtable = VTable{
-                .write = write_impl,
-                .writeAll = writeAll_impl,
-                .writeByte = writeByte_impl,
-                .writeByteNTimes = writeByteNTimes_impl,
-            };
-        };
-
-        return .{
-            .ptr = pointer,
-            .vtable = &gen.vtable,
-        };
+        return GenericWriter.initWithWriteFn(pointer, @field(Child, "write"));
     }
 
-    pub fn write(self: GenericWriter, bytes: []const u8) !usize {
-        return self.vtable.write(self.ptr, bytes);
+    pub fn write(self: GenericWriter, bytes: []const u8) anyerror!usize {
+        return self.writefn(self.ptr, bytes);
     }
 
     pub fn writeAll(self: GenericWriter, bytes: []const u8) !void {
-        return self.vtable.writeAll(self.ptr, bytes);
+        var index: usize = 0;
+        while (index != bytes.len) {
+            index += try self.write(bytes[index..]);
+        }
     }
 
     pub fn writeByte(self: GenericWriter, byte: u8) !void {
-        return self.vtable.writeByte(self.ptr, byte);
+        const array = [1]u8{byte};
+        return self.writeAll(&array);
     }
 
     pub fn writeByteNTimes(self: GenericWriter, byte: u8, n: usize) !void {
-        return self.vtable.writeByteNTimes(self.ptr, byte, n);
+        var bytes: [256]u8 = undefined;
+        @memset(bytes[0..], byte);
+        var remaining: usize = n;
+        while (remaining > 0) {
+            const to_write = @min(remaining, bytes.len);
+            try self.writeAll(bytes[0..to_write]);
+            remaining -= to_write;
+        }
     }
 
     pub fn print(self: GenericWriter, comptime format: []const u8, args: anytype) !void {
         return std.fmt.format(self, format, args);
     }
 
-    /// Write a native-endian integer.
     pub fn writeIntNative(self: GenericWriter, comptime T: type, value: T) !void {
         var bytes: [(@typeInfo(T).Int.bits + 7) / 8]u8 = undefined;
         std.mem.writeIntNative(T, &bytes, value);
-        return self.vtable.writeAll(self.ptr, &bytes);
+        return self.writeAll(&bytes);
     }
 
-    /// Write a foreign-endian integer.
     pub fn writeIntForeign(self: GenericWriter, comptime T: type, value: T) !void {
         var bytes: [(@typeInfo(T).Int.bits + 7) / 8]u8 = undefined;
         std.mem.writeIntForeign(T, &bytes, value);
-        return self.vtable.writeAll(self.ptr, &bytes);
+        return self.writeAll(&bytes);
     }
 
     pub fn writeIntLittle(self: GenericWriter, comptime T: type, value: T) !void {
         var bytes: [(@typeInfo(T).Int.bits + 7) / 8]u8 = undefined;
         std.mem.writeIntLittle(T, &bytes, value);
-        return self.vtable.writeAll(self.ptr, &bytes);
+        return self.writeAll(&bytes);
     }
 
     pub fn writeIntBig(self: GenericWriter, comptime T: type, value: T) !void {
         var bytes: [(@typeInfo(T).Int.bits + 7) / 8]u8 = undefined;
         std.mem.writeIntBig(T, &bytes, value);
-        return self.vtable.writeAll(self.ptr, &bytes);
+        return self.writeAll(&bytes);
     }
 
     pub fn writeInt(self: GenericWriter, comptime T: type, value: T, endian: std.builtin.Endian) !void {
         var bytes: [(@typeInfo(T).Int.bits + 7) / 8]u8 = undefined;
         std.mem.writeInt(T, &bytes, value, endian);
-        return self.vtable.writeAll(self.ptr, &bytes);
+        return self.writeAll(&bytes);
     }
 
     pub fn writeStruct(self: GenericWriter, value: anytype) !void {
         // Only extern and packed structs have defined in-memory layout.
         comptime assert(@typeInfo(@TypeOf(value)).Struct.layout != std.builtin.TypeInfo.ContainerLayout.Auto);
-        return self.vtable.writeAll(self.ptr, std.mem.asBytes(&value));
+        return self.writeAll(std.mem.asBytes(&value));
     }
 };

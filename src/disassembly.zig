@@ -1,6 +1,6 @@
 // ********************************************************************************
 //! https://github.com/PatrickTorgerson/ego
-//! Copyright (c) 2022 Patrick Torgerson
+//! Copyright (c) 2024 Patrick Torgerson
 //! ego uses the MIT license, see LICENSE for more information
 // ********************************************************************************
 
@@ -28,7 +28,7 @@ pub fn disassemble_ins(writer: anytype, code: CodePage, offset: usize, tytable: 
         size += 1;
     }
 
-    const op = @intToEnum(Opcode, ins[0]);
+    const op = @as(Opcode, @enumFromInt(ins[0]));
     ins.ptr += 1;
     size += 1;
 

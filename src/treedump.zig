@@ -1,6 +1,6 @@
 // ********************************************************************************
 //! https://github.com/PatrickTorgerson/ego
-//! Copyright (c) 2022 Patrick Torgerson
+//! Copyright (c) 2024 Patrick Torgerson
 //! ego uses the MIT license, see LICENSE for more information
 // ********************************************************************************
 
@@ -162,7 +162,7 @@ pub fn dump(allocator: std.mem.Allocator, out_writer: anytype, tree: ParseTree, 
             .var_decl => {
                 const data = tree.as_vardecl(node.nodi);
                 try out_writer.writeAll(": ");
-                for (data.identifiers) |lexi, i| {
+                for (data.identifiers, 0..) |lexi, i| {
                     try out_writer.writeAll(strs[lexi]);
                     if (i != data.identifiers.len - 1)
                         try out_writer.writeByte(',');
@@ -175,7 +175,7 @@ pub fn dump(allocator: std.mem.Allocator, out_writer: anytype, tree: ParseTree, 
                     try out_writer.writeAll(strs[lexi]);
                     try out_writer.writeAll("::");
                 }
-                for (data.fields) |lexi, i| {
+                for (data.fields, 0..) |lexi, i| {
                     try out_writer.writeAll(strs[lexi]);
                     if (i != data.fields.len - 1)
                         try out_writer.writeByte('.');

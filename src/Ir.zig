@@ -1,8 +1,8 @@
-//********************************************************************************
-//  https://github.com/PatrickTorgerson/ego
-//  Copyright (c) 2022 Patrick Torgerson
-//  ego uses the MIT license, see LICENSE for more information
-//********************************************************************************
+// ********************************************************************************
+//! https://github.com/PatrickTorgerson/ego
+//! Copyright (c) 2024 Patrick Torgerson
+//! ego uses the MIT license, see LICENSE for more information
+// ********************************************************************************
 
 const std = @import("std");
 
@@ -56,21 +56,21 @@ pub const Ins = struct {
 ///  ir operations
 ///
 pub const Op = enum(u8) {
-    @"u8",
-    @"u16",
-    @"u32",
-    @"u64",
-    @"u128",
-    @"i8",
-    @"i16",
-    @"i32",
-    @"i64",
-    @"i128",
-    @"f16",
-    @"f32",
-    @"f64",
-    @"f128",
-    @"bool",
+    u8,
+    u16,
+    u32,
+    u64,
+    u128,
+    i8,
+    i16,
+    i32,
+    i64,
+    i128,
+    f16,
+    f32,
+    f64,
+    f128,
+    bool,
     global, // local
     add,
     sub,
@@ -85,21 +85,21 @@ pub const Op = enum(u8) {
 ///
 pub const Data = union {
     // immediates
-    @"u8": u8,
-    @"u16": u16,
-    @"u32": u32,
-    @"u64": u64,
-    @"u128": u128,
-    @"i8": i8,
-    @"i16": i16,
-    @"i32": i32,
-    @"i64": i64,
-    @"i128": i128,
-    @"f16": f16,
-    @"f32": f32,
-    @"f64": f64,
-    @"f128": f128,
-    @"bool": bool,
+    u8: u8,
+    u16: u16,
+    u32: u32,
+    u64: u64,
+    u128: u128,
+    i8: i8,
+    i16: i16,
+    i32: i32,
+    i64: i64,
+    i128: i128,
+    f16: f16,
+    f32: f32,
+    f64: f64,
+    f128: f128,
+    bool: bool,
 
     bin: Bin,
     decl: DeclIndex,
@@ -115,21 +115,21 @@ pub const Data = union {
 ///
 pub fn OpData(comptime op: Op) type {
     return switch (op) {
-        .@"u8" => u8,
-        .@"u16" => u16,
-        .@"u32" => u32,
-        .@"u64" => u64,
-        .@"u128" => u128,
-        .@"i8" => i8,
-        .@"i16" => i16,
-        .@"i32" => i32,
-        .@"i64" => i64,
-        .@"i128" => i128,
-        .@"f16" => f16,
-        .@"f32" => f32,
-        .@"f64" => f64,
-        .@"f128" => f128,
-        .@"bool" => bool,
+        .u8 => u8,
+        .u16 => u16,
+        .u32 => u32,
+        .u64 => u64,
+        .u128 => u128,
+        .i8 => i8,
+        .i16 => i16,
+        .i32 => i32,
+        .i64 => i64,
+        .i128 => i128,
+        .f16 => f16,
+        .f32 => f32,
+        .f64 => f64,
+        .f128 => f128,
+        .bool => bool,
         .global => DeclIndex,
         .add => Data.Bin,
         .sub => Data.Bin,

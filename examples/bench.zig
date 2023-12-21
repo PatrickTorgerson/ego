@@ -1,6 +1,6 @@
 // ********************************************************************************
 //! https://github.com/PatrickTorgerson/ego
-//! Copyright (c) 2022 Patrick Torgerson
+//! Copyright (c) 2024 Patrick Torgerson
 //! ego uses the MIT license, see LICENSE for more information
 // ********************************************************************************
 
@@ -8,7 +8,7 @@ const std = @import("std");
 const ego = @import("ego");
 
 const default_src: []const u8 =
-    \\  const a = 1 ; const b,c,d,e = 9,8,7,6
+    \\  const a = i32: 1 ; const b,c,d,e = i32: 9, i32: 8, i32: 7, i32: 6
     \\
 ;
 
@@ -175,24 +175,24 @@ pub fn main() !void {
     if (dump_ir) {
         // TODO: actual ir dissasembly
         try header(out, "intermediate representation");
-        for (ir.instructions) |ins, i| {
+        for (ir.instructions, 0..) |ins, i| {
             try out.print("//~ %{} = {s} ", .{ i, @tagName(ins.op) });
             switch (ins.op) {
-                .@"u8" => try out.print("{}", .{ins.data.@"u8"}),
-                .@"u16" => try out.print("{}", .{ins.data.@"u16"}),
-                .@"u32" => try out.print("{}", .{ins.data.@"u32"}),
-                .@"u64" => try out.print("{}", .{ins.data.@"u64"}),
-                .@"u128" => try out.print("{}", .{ins.data.@"u128"}),
-                .@"i8" => try out.print("{}", .{ins.data.@"i8"}),
-                .@"i16" => try out.print("{}", .{ins.data.@"i16"}),
-                .@"i32" => try out.print("{}", .{ins.data.@"i32"}),
-                .@"i64" => try out.print("{}", .{ins.data.@"i64"}),
-                .@"i128" => try out.print("{}", .{ins.data.@"i128"}),
-                .@"f16" => try out.print("{}", .{ins.data.@"f16"}),
-                .@"f32" => try out.print("{}", .{ins.data.@"f32"}),
-                .@"f64" => try out.print("{}", .{ins.data.@"f64"}),
-                .@"f128" => try out.print("{}", .{ins.data.@"f128"}),
-                .@"bool" => try out.print("{}", .{ins.data.@"bool"}),
+                .u8 => try out.print("{}", .{ins.data.u8}),
+                .u16 => try out.print("{}", .{ins.data.u16}),
+                .u32 => try out.print("{}", .{ins.data.u32}),
+                .u64 => try out.print("{}", .{ins.data.u64}),
+                .u128 => try out.print("{}", .{ins.data.u128}),
+                .i8 => try out.print("{}", .{ins.data.i8}),
+                .i16 => try out.print("{}", .{ins.data.i16}),
+                .i32 => try out.print("{}", .{ins.data.i32}),
+                .i64 => try out.print("{}", .{ins.data.i64}),
+                .i128 => try out.print("{}", .{ins.data.i128}),
+                .f16 => try out.print("{}", .{ins.data.f16}),
+                .f32 => try out.print("{}", .{ins.data.f32}),
+                .f64 => try out.print("{}", .{ins.data.f64}),
+                .f128 => try out.print("{}", .{ins.data.f128}),
+                .bool => try out.print("{}", .{ins.data.bool}),
                 .global => try out.print("'{s}'", .{ir.stringcache.get(ir.decls[ins.data.decl].name)}),
                 .add, .sub, .mul, .div, .get, .set => try out.print("%{} %{}", .{ ins.data.bin.l, ins.data.bin.r }),
             }
@@ -214,14 +214,14 @@ fn set_output(allocator: std.mem.Allocator, path: []const u8) !std.fs.File {
     defer allocator.free(absolute);
     std.debug.print("dumping to '{s}'\n", .{absolute});
     _ = try std.fs.createFileAbsolute(absolute, .{});
-    var file = try std.fs.openFileAbsolute(absolute, .{ .mode = .read_write });
+    const file = try std.fs.openFileAbsolute(absolute, .{ .mode = .read_write });
     return file;
 }
 
 /// dumps source to out ommiting prev dumps
 fn dump_source(out: anytype, src: []const u8) !void {
     var comment = false;
-    for (src) |c, i| {
+    for (src, 0..) |c, i| {
         if (comment) {
             if (c == '\n')
                 comment = false;

@@ -1,6 +1,6 @@
 // ********************************************************************************
 //! https://github.com/PatrickTorgerson/ego
-//! Copyright (c) 2022 Patrick Torgerson
+//! Copyright (c) 2024 Patrick Torgerson
 //! ego uses the MIT license, see LICENSE for more information
 // ********************************************************************************
 
@@ -616,8 +616,8 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
     return ParseTree{
         .nodes = parser.nodes.slice(),
         .lexemes = lexemes.slice(),
-        .data = parser.data.toOwnedSlice(allocator),
-        .diagnostics = parser.diagnostics.toOwnedSlice(allocator),
+        .data = try parser.data.toOwnedSlice(allocator),
+        .diagnostics = try parser.diagnostics.toOwnedSlice(allocator),
     };
 }
 
@@ -795,7 +795,7 @@ const Parser = struct {
     ///  pops top n items from work_stack
     ///
     pub fn popn(this: *Parser, n: usize) void {
-        const amt = std.math.min(n, this.work_stack.items.len);
+        const amt = @min(n, this.work_stack.items.len);
         this.work_stack.items.len -= amt;
     }
 
@@ -943,7 +943,7 @@ fn precedence(op: Terminal) usize {
             1, // ky_or
         };
     };
-    return static.data[@intCast(usize, @enumToInt(op))];
+    return static.data[@as(usize, @intCast(@intFromEnum(op)))];
 }
 
 //============================================================================
