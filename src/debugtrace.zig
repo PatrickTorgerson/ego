@@ -7,14 +7,14 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const GenericWriter = @import("util.zig").GenericWriter;
+const AnyWriter = @import("util.zig").AnyWriter;
 
 var mutex: std.Thread.Mutex = .{};
-var writer: ?GenericWriter = null;
+var writer: ?AnyWriter = null;
 threadlocal var buffer: ?std.ArrayList(u8) = null;
 
 /// set output writer for trace
-pub fn setOutWriter(out_writer: GenericWriter) void {
+pub fn setOutWriter(out_writer: AnyWriter) void {
     if (builtin.mode == std.builtin.Mode.Debug) {
         mutex.lock();
         defer mutex.unlock();

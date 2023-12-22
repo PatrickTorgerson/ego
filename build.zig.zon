@@ -2,7 +2,16 @@
     .name = "ego",
     .version = "0.0.0",
     .minimum_zig_version = "0.11.0",
-    .dependencies = .{},
+    .dependencies = .{
+        .zcon = .{
+            .url = "https://github.com/PatrickTorgerson/zcon/archive/v1.1.1.tar.gz",
+            .hash = "12203feb8ad701b990c31dd22e01a52cae9980be88af973b5464263a6ec914a14114",
+        },
+        .parsley = .{
+            .url = "https://github.com/PatrickTorgerson/parsley/archive/v1.2.0.tar.gz",
+            .hash = "1220717b9ee8fea2a9c56b3ec6a2738427a479e0beeb8b02304534cfa96e4c5fc5d1",
+        },
+    },
     .paths = .{
         "build.zig",
         "build.zig.zon",

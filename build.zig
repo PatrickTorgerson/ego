@@ -14,13 +14,15 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const parsley = b.dependency("parsley", .{}).module("parsley");
+    const zcon = b.dependency("zcon", .{}).module("zcon");
+
     const ego = b.addModule("ego", .{
         .source_file = std.Build.FileSource.relative("./src/ego.zig"),
         .dependencies = &.{},
     });
 
     // -- examples
-
     const example_step = b.step("examples", "Build all examples");
     inline for (examples) |example| {
         const exe = b.addExecutable(.{
@@ -30,8 +32,9 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         });
         exe.addModule("ego", ego);
+        exe.addModule("zcon", zcon);
+        exe.addModule("parsley", parsley);
         b.installArtifact(exe);
-
         const run_cmd = b.addRunArtifact(exe);
         run_cmd.step.dependOn(b.getInstallStep());
         if (b.args) |args| {
@@ -43,7 +46,6 @@ pub fn build(b: *std.Build) void {
     }
 
     // -- testing
-
     const tests = b.addTest(.{
         .root_source_file = std.Build.FileSource.relative("./src/ego.zig"),
         .target = target,
@@ -53,13 +55,11 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_tests.step);
 
     // -- formatting
-
     const fmt_step = b.step("fmt", "Run formatter");
     const fmt = b.addFmt(.{
         .paths = &.{ "src", "examples", "build.zig" },
         .check = true,
     });
-
     fmt_step.dependOn(&fmt.step);
     b.default_step.dependOn(fmt_step);
 
