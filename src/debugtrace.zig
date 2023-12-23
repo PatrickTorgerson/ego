@@ -7,7 +7,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const AnyWriter = @import("util.zig").AnyWriter;
+const AnyWriter = @import("AnyWriter.zig");
 
 var mutex: std.Thread.Mutex = .{};
 var writer: ?AnyWriter = null;

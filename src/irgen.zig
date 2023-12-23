@@ -14,7 +14,6 @@ const Ir = @import("Ir.zig");
 const StringCache = @import("StringCache.zig");
 const Type = @import("type.zig").Type;
 const TypeTable = @import("type.zig").TypeTable;
-const ReverseIter = @import("util.zig").ReverseIter;
 
 const Symbol = grammar.Symbol;
 const LexemeIndex = grammar.LexemeIndex;
@@ -74,7 +73,7 @@ pub fn genIr(allocator: std.mem.Allocator, tree: ParseTree) !Ir {
     // reverse so that they get popped off the stack in decending order
     const mod = tree.asModule(0);
     try gen.node_stack.ensureTotalCapacity(allocator, mod.top_decls.len + 5);
-    var iter = ReverseIter(ParseTree.NodeIndex).init(mod.top_decls);
+    var iter = std.mem.reverseIterator(mod.top_decls);
     while (iter.next()) |nodi| {
         gen.node_stack.appendAssumeCapacity(nodi);
     }
@@ -183,7 +182,7 @@ const IrGen = struct {
             .var_decl => {
                 const data = gen.tree.asVardecl(nodi);
                 // allocate declarations
-                var lexi_iter = ReverseIter(LexemeIndex).init(data.identifiers);
+                var lexi_iter = std.mem.reverseIterator(data.identifiers);
                 while (lexi_iter.next()) |lexi| {
                     const deci = gen.decls.items.len;
                     const name = try gen.cacheLexi(lexi);
@@ -203,7 +202,7 @@ const IrGen = struct {
                     try gen.namespaces.items[0].decls.put(gen.allocator, name, deci);
                 }
                 // queue initializers
-                var nodi_iter = ReverseIter(NodeIndex).init(data.initializers);
+                var nodi_iter = std.mem.reverseIterator(data.initializers);
                 while (nodi_iter.next()) |init_nodi| {
                     try gen.node_stack.append(gen.allocator, init_nodi);
                     try gen.appendStates(.{ .node, .init_var });

@@ -8,7 +8,6 @@ const std = @import("std");
 const assert = std.debug.assert;
 
 const debugtrace = @import("debugtrace.zig");
-const ReverseIter = @import("util.zig").ReverseIter;
 const Lexer = @import("lex.zig").Lexer;
 const Lexeme = @import("lex.zig").Lexeme;
 const Terminal = @import("grammar.zig").Terminal;
