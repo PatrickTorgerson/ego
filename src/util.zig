@@ -8,6 +8,7 @@ const std = @import("std");
 const assert = std.debug.assert;
 
 /// iterates over slice in reverse order
+/// TODO: I'm pretty sure this exists in std somewhere
 pub fn ReverseIter(comptime T: type) type {
     return struct {
         const This = @This();
@@ -36,9 +37,9 @@ pub fn ReverseIter(comptime T: type) type {
 /// type erased witer
 pub const AnyWriter = struct {
     /// pointer to underlying writer
-    ptr: *const anyopaque,
+    ptr: *anyopaque,
     /// pointer to write function
-    writefn: *const fn (ptr: *const anyopaque, bytes: []const u8) anyerror!usize,
+    writefn: *const fn (ptr: *anyopaque, bytes: []const u8) anyerror!usize,
 
     pub const Error = anyerror;
 
@@ -46,21 +47,30 @@ pub const AnyWriter = struct {
     /// expected signiture of writefn `fn(self: @TypeOf(pointer), bytes: []const u8) !usize`
     /// where number of bytes written is returned
     pub fn initWithWriteFn(pointer: anytype, writefn: anytype) AnyWriter {
-        comptime var ptr_info = @typeInfo(@TypeOf(pointer));
+        const ptr_info = comptime @typeInfo(@TypeOf(pointer));
         comptime assert(ptr_info == .Pointer); // Must be a pointer
         comptime assert(ptr_info.Pointer.size == .One); // Must be a single-item pointer
-        comptime assert(@typeInfo(@TypeOf(writefn)) == .Fn); // writefn must be function
-        ptr_info.Pointer.is_const = true;
-        const Ptr = @Type(ptr_info);
+        const fn_info = comptime @typeInfo(@TypeOf(writefn));
+        comptime assert(fn_info == .Fn); // writefn must be function
+        const self_info = @typeInfo(fn_info.Fn.params[0].type.?);
+        const expect_ptr = self_info == .Pointer;
+        const Ptr = @TypeOf(pointer);
         const proxy = struct {
-            fn write_proxy(ptr: *const anyopaque, bytes: []const u8) !usize {
+            fn write_proxy_val(ptr: *anyopaque, bytes: []const u8) !usize {
                 const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
                 return @call(.always_inline, writefn, .{ self.*, bytes });
+            }
+            fn write_proxy_ptr(ptr: *anyopaque, bytes: []const u8) !usize {
+                const self = @as(Ptr, @ptrCast(@alignCast(ptr)));
+                return @call(.always_inline, writefn, .{ self, bytes });
             }
         };
         return .{
             .ptr = pointer,
-            .writefn = proxy.write_proxy,
+            .writefn = if (expect_ptr)
+                proxy.write_proxy_ptr
+            else
+                proxy.write_proxy_val,
         };
     }
 

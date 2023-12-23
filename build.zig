@@ -19,7 +19,7 @@ pub fn build(b: *std.Build) void {
 
     const ego = b.addModule("ego", .{
         .source_file = std.Build.FileSource.relative("./src/ego.zig"),
-        .dependencies = &.{},
+        .dependencies = &.{.{ .name = "zcon", .module = zcon }},
     });
 
     // -- examples
