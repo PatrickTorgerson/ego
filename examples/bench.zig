@@ -9,7 +9,7 @@ const ego = @import("ego");
 const zcon = @import("zcon");
 const parsley = @import("parsley");
 
-const AnyWriter = ego.util.AnyWriter;
+const AnyWriter = ego.AnyWriter;
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};

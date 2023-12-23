@@ -7,7 +7,6 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
-const ReverseIter = @import("util.zig").ReverseIter;
 const ParseTree = @import("ParseTree.zig");
 const grammar = @import("grammar.zig");
 const Lexeme = @import("lex.zig").Lexeme;
@@ -50,13 +49,13 @@ pub const ParseTreeIterator = struct {
         switch (self.syms[top.nodi]) {
             .module => {
                 const data = self.tree.asModule(top.nodi);
-                var iter = ReverseIter(NodeIndex).init(data.top_decls);
+                var iter = std.mem.reverseIterator(data.top_decls);
                 while (iter.next()) |nodi|
                     try self.push(nodi, top.depth + 1);
             },
             .var_decl => {
                 const data = self.tree.asVardecl(top.nodi);
-                var iter = ReverseIter(NodeIndex).init(data.initializers);
+                var iter = std.mem.reverseIterator(data.initializers);
                 while (iter.next()) |nodi|
                     try self.push(nodi, top.depth + 1);
             },
