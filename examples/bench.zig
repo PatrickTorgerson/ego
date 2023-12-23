@@ -115,11 +115,10 @@ const Trace = struct {
             if (out_file) |of|
                 out_file_writer = of.writer();
         }
-        const out_writer = if (out_file) |of|
-            of.writer()
+        const out = if (out_file_writer) |*ofw|
+            AnyWriter.init(ofw)
         else
-            std.io.getStdOut().writer();
-        const out = AnyWriter.init(&out_writer);
+            AnyWriter.init(writer);
 
         // set up debug trace
         ego.debugtrace.setOutWriter(out);
