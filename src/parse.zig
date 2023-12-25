@@ -99,7 +99,7 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
             // => [KY_PUB], .var_decl, .chained_var_decl, .terminator
             .top_decl => {
                 _ = parser.consume(.ky_pub);
-                defer parser.top_decl_work_offset = parser.work_stack.items.len;
+                parser.top_decl_work_offset = parser.work_stack.items.len;
                 switch (parser.lexeme()) {
                     //.ky_var,
                     .ky_let => {
@@ -224,7 +224,7 @@ pub fn parse(allocator: std.mem.Allocator, source: []const u8) !ParseTree {
                     },
                     else => {
                         try parser.diag(.expected_expression);
-                        if (parser.check(.comma)) {
+                        if (parser.check(.comma) or parser.check(.semicolon)) {
                             try parser.appendStates(.{.expr_list_cont});
                             try parser.newCount();
                             try parser.push(dummy_nodi);
@@ -787,7 +787,7 @@ const Parser = struct {
         while (self.lex_terminals[self.lexi] != .eof) : (self.advance()) {
             if (lvl <= 0)
                 switch (self.lexeme()) {
-                    .ky_let, .ky_mut => return,
+                    .ky_let => return,
                     .semicolon => {
                         self.advance();
                         return;
@@ -879,7 +879,7 @@ test "parse var_decl" {
     try std.testing.expect(tree.diagnostics.len == 0);
 }
 
-test "parse chained var decl" {
+test "parse several var decl" {
     var tree = try parse(std.testing.allocator, "let a = 1; let b = 2; let c = 3;");
     defer tree.deinit(std.testing.allocator);
     try std.testing.expect(tree.diagnostics.len == 0);
@@ -889,6 +889,199 @@ test "parse chained var decl" {
     try std.testing.expectEqual(Symbol.module, syms[(try iter.next()).?.nodi]);
     try std.testing.expectEqual(Symbol.var_decl, syms[(try iter.next()).?.nodi]);
     try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.var_decl, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.var_decl, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(try iter.next(), null);
+}
+
+test "parse expected top level decl and recover" {
+    var tree = try parse(std.testing.allocator, "let a = 1; fn b = 2; let c = 3;");
+    defer tree.deinit(std.testing.allocator);
+    try std.testing.expect(tree.diagnostics.len == 1);
+    try std.testing.expect(tree.diagnostics[0].tag == .expected_top_level_decl);
+    const syms = tree.nodes.items(.symbol);
+    var iter = try ParseTreeIterator.init(std.testing.allocator, &tree);
+    defer iter.deinit();
+    try std.testing.expectEqual(Symbol.module, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.var_decl, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.var_decl, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(try iter.next(), null);
+}
+
+test "parse expected identifier and recover" {
+    var tree = try parse(std.testing.allocator, "let a = 1; let for = 2; let c = 3;");
+    defer tree.deinit(std.testing.allocator);
+    try std.testing.expect(tree.diagnostics.len == 1);
+    try std.testing.expect(tree.diagnostics[0].tag == .expected_lexeme);
+    try std.testing.expect(tree.diagnostics[0].expected.? == .identifier);
+    const syms = tree.nodes.items(.symbol);
+    var iter = try ParseTreeIterator.init(std.testing.allocator, &tree);
+    defer iter.deinit();
+    try std.testing.expectEqual(Symbol.module, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.var_decl, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.var_decl, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(try iter.next(), null);
+}
+
+test "parse missing identifier and recover" {
+    var tree = try parse(std.testing.allocator, "let a = 1; let = 2; let c = 3;");
+    defer tree.deinit(std.testing.allocator);
+    try std.testing.expect(tree.diagnostics.len == 1);
+    try std.testing.expect(tree.diagnostics[0].tag == .expected_lexeme);
+    try std.testing.expect(tree.diagnostics[0].expected.? == .identifier);
+    const syms = tree.nodes.items(.symbol);
+    var iter = try ParseTreeIterator.init(std.testing.allocator, &tree);
+    defer iter.deinit();
+    try std.testing.expectEqual(Symbol.module, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.var_decl, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.var_decl, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.var_decl, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(try iter.next(), null);
+}
+
+test "parse missing identifier in id list and recover" {
+    var tree = try parse(std.testing.allocator, "let a = 1; let a,,b = 2; let c = 3;");
+    defer tree.deinit(std.testing.allocator);
+    try std.testing.expect(tree.diagnostics.len == 1);
+    try std.testing.expect(tree.diagnostics[0].tag == .expected_lexeme);
+    try std.testing.expect(tree.diagnostics[0].expected.? == .identifier);
+    const syms = tree.nodes.items(.symbol);
+    var iter = try ParseTreeIterator.init(std.testing.allocator, &tree);
+    defer iter.deinit();
+    try std.testing.expectEqual(Symbol.module, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.var_decl, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.var_decl, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.var_decl, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(try iter.next(), null);
+}
+
+test "parse expected identifier in id list and recover" {
+    var tree = try parse(std.testing.allocator, "let a = 1; let a,for,b = 2; let c = 3;");
+    defer tree.deinit(std.testing.allocator);
+    try std.testing.expect(tree.diagnostics.len == 1);
+    try std.testing.expect(tree.diagnostics[0].tag == .expected_lexeme);
+    try std.testing.expect(tree.diagnostics[0].expected.? == .identifier);
+    const syms = tree.nodes.items(.symbol);
+    var iter = try ParseTreeIterator.init(std.testing.allocator, &tree);
+    defer iter.deinit();
+    try std.testing.expectEqual(Symbol.module, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.var_decl, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.var_decl, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(try iter.next(), null);
+}
+
+test "parse missing expr and recover" {
+    var tree = try parse(std.testing.allocator, "let a = 1; let b = ; let c = 3;");
+    defer tree.deinit(std.testing.allocator);
+    try std.testing.expect(tree.diagnostics.len == 1);
+    try std.testing.expect(tree.diagnostics[0].tag == .expected_expression);
+    const syms = tree.nodes.items(.symbol);
+    var iter = try ParseTreeIterator.init(std.testing.allocator, &tree);
+    defer iter.deinit();
+    try std.testing.expectEqual(Symbol.module, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.var_decl, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.var_decl, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.@"<ERR>", syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.var_decl, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(try iter.next(), null);
+}
+
+test "parse missing expr in list and recover" {
+    var tree = try parse(std.testing.allocator, "let a = 1; let b = ,4; let c = 3;");
+    defer tree.deinit(std.testing.allocator);
+    try std.testing.expect(tree.diagnostics.len == 1);
+    try std.testing.expect(tree.diagnostics[0].tag == .expected_expression);
+    const syms = tree.nodes.items(.symbol);
+    var iter = try ParseTreeIterator.init(std.testing.allocator, &tree);
+    defer iter.deinit();
+    try std.testing.expectEqual(Symbol.module, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.var_decl, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.var_decl, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.@"<ERR>", syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.var_decl, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(try iter.next(), null);
+}
+
+test "parse missing middle expr in list and recover" {
+    var tree = try parse(std.testing.allocator, "let a = 1; let b = 3,,4; let c = 3;");
+    defer tree.deinit(std.testing.allocator);
+    try std.testing.expect(tree.diagnostics.len == 1);
+    try std.testing.expect(tree.diagnostics[0].tag == .expected_expression);
+    const syms = tree.nodes.items(.symbol);
+    var iter = try ParseTreeIterator.init(std.testing.allocator, &tree);
+    defer iter.deinit();
+    try std.testing.expectEqual(Symbol.module, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.var_decl, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.var_decl, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.@"<ERR>", syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.var_decl, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(try iter.next(), null);
+}
+
+test "parse expected expr and recover" {
+    var tree = try parse(std.testing.allocator, "let a = 1; let b = for; let c = 3;");
+    defer tree.deinit(std.testing.allocator);
+    try std.testing.expect(tree.diagnostics.len == 1);
+    try std.testing.expect(tree.diagnostics[0].tag == .expected_expression);
+    const syms = tree.nodes.items(.symbol);
+    var iter = try ParseTreeIterator.init(std.testing.allocator, &tree);
+    defer iter.deinit();
+    try std.testing.expectEqual(Symbol.module, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.var_decl, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.var_decl, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(try iter.next(), null);
+}
+
+test "parse expected expr in list and recover" {
+    var tree = try parse(std.testing.allocator, "let a = 1; let b = for,4; let c = 3;");
+    defer tree.deinit(std.testing.allocator);
+    try std.testing.expect(tree.diagnostics.len == 1);
+    try std.testing.expect(tree.diagnostics[0].tag == .expected_expression);
+    const syms = tree.nodes.items(.symbol);
+    var iter = try ParseTreeIterator.init(std.testing.allocator, &tree);
+    defer iter.deinit();
+    try std.testing.expectEqual(Symbol.module, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.var_decl, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.var_decl, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
+    try std.testing.expectEqual(try iter.next(), null);
+}
+
+test "parse expected middle expr in list and recover" {
+    var tree = try parse(std.testing.allocator, "let a = 1; let b = 3,for,4; let c = 3;");
+    defer tree.deinit(std.testing.allocator);
+    try std.testing.expect(tree.diagnostics.len == 1);
+    try std.testing.expect(tree.diagnostics[0].tag == .expected_expression);
+    const syms = tree.nodes.items(.symbol);
+    var iter = try ParseTreeIterator.init(std.testing.allocator, &tree);
+    defer iter.deinit();
+    try std.testing.expectEqual(Symbol.module, syms[(try iter.next()).?.nodi]);
     try std.testing.expectEqual(Symbol.var_decl, syms[(try iter.next()).?.nodi]);
     try std.testing.expectEqual(Symbol.literal_int, syms[(try iter.next()).?.nodi]);
     try std.testing.expectEqual(Symbol.var_decl, syms[(try iter.next()).?.nodi]);

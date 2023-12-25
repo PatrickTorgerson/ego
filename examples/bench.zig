@@ -165,17 +165,18 @@ const Trace = struct {
         }
 
         if (tree.diagnostics.len > 0) {
-            std.debug.print("Aborting due to parse error(s)\n", .{});
+            try out.print("\nAborting due to parse error(s)\n", .{});
             for (tree.diagnostics) |diag| {
-                std.debug.print(" {s} ", .{@tagName(diag.tag)});
+                try out.print(" {s} ", .{@tagName(diag.tag)});
                 if (diag.tag == .expected_lexeme)
-                    std.debug.print(" '{s}' ", .{@tagName(diag.expected.?)});
-                std.debug.print("at {s}\n", .{tree.lexemes.items(.str)[diag.lexi]});
+                    try out.print(" '{s}' ", .{@tagName(diag.expected.?)});
+                try out.print("at {s}\n", .{tree.lexemes.items(.str)[diag.lexi]});
             }
             return;
         }
 
         // -- ir gen --
+        if (!trace_sema) return;
 
         if (!opts.@"results-only" and trace_sema) {
             try header(out, "semantic analysis debug trace");
