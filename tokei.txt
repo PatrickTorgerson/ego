@@ -1,24 +1,24 @@
 ===============================================================================
  Language            Files        Lines         Code     Comments       Blanks
 ===============================================================================
- Zig                    16         4172         3097          638          437
+ Zig                    16         3860         3153          363          344
 -------------------------------------------------------------------------------
- src\parse.zig                     1062          785          169          108
- src\lex.zig                        862          699           63          100
- src\irgen.zig                      533          425           69           39
- src\treedump.zig                   235          183           38           14
- src\grammar.zig                    227          164           40           23
- src\type.zig                       185          131           39           15
- src\ParseTree.zig                  160           94           48           18
- src\Ir.zig                         156          114           29           13
- src\vm.zig                         156          113           19           24
- src\util.zig                       148          107           22           19
- src\buffer_stack.zig               116           77           21           18
- src\debugtrace.zig                 101           60           30           11
- src\disassembly.zig                 82           62            7           13
- src\StringCache.zig                 68           38           22            8
- src\instruction.zig                 65           37           17           11
+ src\parse.zig                     1163          955          106          102
+ src\LexemeIterator.zig             663          610           20           33
+ src\irgen.zig                      506          424           43           39
+ src\treedump.zig                   213          182           17           14
+ src\grammar.zig                    206          161           26           19
+ src\type.zig                       163          131           17           15
+ src\vm.zig                         142          113           11           18
+ src\Ir.zig                         142          114           15           13
+ src\ParseTree.zig                  135           94           24           17
+ src\AnyWriter.zig                  130           96           17           17
+ src\buffer_stack.zig               109           77           14           18
+ src\debugtrace.zig                  85           60           14           11
+ src\disassembly.zig                 80           62            5           13
+ src\instruction.zig                 59           37           17            5
+ src\StringCache.zig                 48           29           12            7
  src\ego.zig                         16            8            5            3
 ===============================================================================
- Total                  16         4172         3097          638          437
+ Total                  16         3860         3153          363          344
 ===============================================================================

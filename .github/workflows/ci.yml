@@ -20,7 +20,7 @@ concurrency:
   group: ${{ github.head_ref || github.run_id }}-${{ github.actor }}
   cancel-in-progress: true
 jobs:
- x86_64-windows-debug:
+  x86_64-windows-debug:
     runs-on: windows-latest
     env:
       ARCH: "x86_64"
@@ -34,5 +34,28 @@ jobs:
           cd C:\
           7z x zig.zip
           Add-Content $env:GITHUB_PATH 'C:\zig-windows-x86_64-0.12.0-dev.1092+68ed78775\'
+      - name: test
+        run: zig build test --summary all
+  x86_64-linux:
+      runs-on: ubuntu-latest
+      steps:
+        - name: Checkout
+          uses: actions/checkout@v3
+        - name: Setup Zig
+          run: |
+            sudo apt install xz-utils
+            sudo sh -c 'wget -c https://pkg.machengine.org/zig/zig-linux-x86_64-0.12.0-dev.1092+68ed78775.tar.xz -O - | tar -xJ --strip-components=1 -C /usr/local/bin'
+        - name: test
+          run: zig build test --summary all
+  x86_64-macos:
+    runs-on: macos-12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Zig
+        run: |
+          brew uninstall --ignore-dependencies libx11 # https://github.com/ziglang/zig/issues/11066
+          brew install xz
+          sudo sh -c 'wget -c https://pkg.machengine.org/zig/zig-macos-x86_64-0.12.0-dev.1092+68ed78775.tar.xz -O - | tar -xJ --strip-components=1 -C /usr/local/bin'
       - name: test
         run: zig build test --summary all
