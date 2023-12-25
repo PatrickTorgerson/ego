@@ -14,7 +14,7 @@ Custom programming language for learning and for fun
 
 ```rust
 pub type Vec2 = struct {
-    x,y f64
+    f64: x,y
 }
 
 pub fn |Vec2| lensqrd() f64 {
@@ -26,13 +26,13 @@ pub fn |Vec2| len() f64 {
 }
 
 pub fn |mut Vec2| normalize() {
-    const len = .len();
+    let len = .len();
     .x /= len;
     .y /= len;
 }
 
 pub fn main() {
-    const pos = Vec2: 1,1;
+    let pos = Vec2: {1,1};
     assert pos.len() == 1.4142;
     pos.normalize();
     assert pos.len() == 1;
