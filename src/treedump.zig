@@ -9,7 +9,7 @@ const assert = std.debug.assert;
 
 const ParseTree = @import("ParseTree.zig");
 const grammar = @import("grammar.zig");
-const Lexeme = @import("lex.zig").Lexeme;
+const Lexeme = @import("LexemeIterator.zig").Lexeme;
 const Symbol = grammar.Symbol;
 
 const LexemeIndex = grammar.LexemeIndex;

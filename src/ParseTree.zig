@@ -8,7 +8,7 @@ const std = @import("std");
 const assert = std.debug.assert;
 
 const grammar = @import("grammar.zig");
-const Lexeme = @import("lex.zig").Lexeme;
+const Lexeme = @import("LexemeIterator.zig").Lexeme;
 const Symbol = grammar.Symbol;
 
 pub const LexemeIndex = grammar.LexemeIndex;
@@ -39,7 +39,7 @@ pub const Diagnostic = struct {
     pub const Tag = enum {
         expected_top_level_decl,
         expected_expression,
-        expected_newline,
+        expected_semicolon,
         undelimited_top_var,
         unexpected_lexeme,
         /// `expected` is populated.

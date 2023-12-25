@@ -8,7 +8,7 @@ const std = @import("std");
 
 const debugtrace = @import("debugtrace.zig");
 const grammar = @import("grammar.zig");
-const Lexeme = @import("lex.zig").Lexeme;
+const Lexeme = @import("LexemeIterator.zig").Lexeme;
 const ParseTree = @import("ParseTree.zig");
 const Ir = @import("Ir.zig");
 const StringCache = @import("StringCache.zig");
