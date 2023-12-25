@@ -12,25 +12,30 @@ Custom programming language for learning and for fun
 >       Currently only basic variable declarations are being parsed
 
 ```rust
-pub type Vec2 = struct
+pub type Vec2 = struct {
     x,y f64
+}
 
-pub fn |Vec2| lensqrd() f64
-    return .x * .x + .y * .y
+pub fn |Vec2| lensqrd() f64 {
+    return .x * .x + .y * .y;
+}
 
-pub fn |Vec2| len() f64
-    return ego::sqrt(.lensqrd())
+pub fn |Vec2| len() f64 {
+    return ego::sqrt(.lensqrd());
+}
 
-pub fn |mut Vec2| normalize()
-    const len = .len()
-    .x /= len
-    .y /= len
+pub fn |mut Vec2| normalize() {
+    const len = .len();
+    .x /= len;
+    .y /= len;
+}
 
-pub fn main()
-    const pos = Vec2: 1,1
-    assert pos.len() == 1.4142
-    pos.normalize()
-    assert pos.len() == 1
+pub fn main() {
+    const pos = Vec2: 1,1;
+    assert pos.len() == 1.4142;
+    pos.normalize();
+    assert pos.len() == 1;
+}
 ```
 
 ## Licence
