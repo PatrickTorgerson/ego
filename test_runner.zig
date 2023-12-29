@@ -136,11 +136,11 @@ fn mainTerminal() void {
     var skip_count: usize = 0;
     var fail_count: usize = 0;
 
-    const stderr = std.io.getStdErr();
+    const stdout = std.io.getStdOut();
     const term = @This(){
         .test_count = test_fn_list.len,
-        .tty = if (stderr.supportsAnsiEscapeCodes()) std.io.tty.Config.escape_codes else null,
-        .writer = stderr.writer(),
+        .tty = if (stdout.supportsAnsiEscapeCodes()) std.io.tty.Config.escape_codes else null,
+        .writer = stdout.writer(),
     };
 
     var async_frame_buffer: []align(builtin.target.stackAlignment()) u8 = undefined;
@@ -194,15 +194,15 @@ fn mainTerminal() void {
         term.report(i + 1, test_fn.name, status);
     }
     if (ok_count == test_fn_list.len) {
-        stderr.writer().print("All {d} tests passed.\n", .{ok_count}) catch {};
+        stdout.writer().print("All {d} tests passed.\n", .{ok_count}) catch {};
     } else {
-        stderr.writer().print("{d} passed; {d} skipped; {d} failed.\n", .{ ok_count, skip_count, fail_count }) catch {};
+        stdout.writer().print("{d} passed; {d} skipped; {d} failed.\n", .{ ok_count, skip_count, fail_count }) catch {};
     }
     if (log_err_count != 0) {
-        stderr.writer().print("{d} errors were logged.\n", .{log_err_count}) catch {};
+        stdout.writer().print("{d} errors were logged.\n", .{log_err_count}) catch {};
     }
     if (leaks != 0) {
-        stderr.writer().print("{d} tests leaked memory.\n", .{leaks}) catch {};
+        stdout.writer().print("{d} tests leaked memory.\n", .{leaks}) catch {};
     }
     if (leaks != 0 or log_err_count != 0 or fail_count != 0) {
         std.process.exit(1);
