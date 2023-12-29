@@ -48,6 +48,7 @@ pub fn build(b: *std.Build) void {
     // -- testing
     const tests = b.addTest(.{
         .root_source_file = std.Build.LazyPath.relative("./src/ego.zig"),
+        .test_runner = std.Build.LazyPath.relative("./test_runner.zig").path,
         .target = target,
     });
     const run_tests = b.addRunArtifact(tests);
