@@ -25,6 +25,8 @@ fn mainTerminal() void {
     var skip_count: usize = 0;
     var fail_count: usize = 0;
 
+    std.debug.print("woot woot\n", .{});
+
     const stdout = std.io.getStdOut();
     const term = @This(){
         .test_count = test_fn_list.len,

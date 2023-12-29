@@ -14,3 +14,8 @@ pub const AnyWriter = @import("AnyWriter.zig");
 test {
     std.testing.refAllDecls(@This());
 }
+
+test "fail" {
+    std.log.info("testing 1 2 3", .{});
+    try std.testing.expectEqualStrings("one", "two");
+}
